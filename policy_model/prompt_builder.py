@@ -26,11 +26,22 @@ def build_tactic_prompt(state: dict[str, Any], retrieved_traces: list[dict[str, 
         "Return ONLY JSON matching this strict schema (no markdown, no prose):\n"
         f"{TACTIC_RESPONSE_SCHEMA}\n"
         "Rules:\n"
-        "- Keep tactics concise and executable in Lean.\n"
-        "- Prefer high-probability next steps for the current goal.\n"
-        "- Do not include explanations.\n"
+        "- Output exactly one object with key 'tactics'.\n"
+        "- 'tactics' must be an array of concise executable Lean tactic strings.\n"
+        "- Do not include explanations or extra keys.\n"
         f"Current goal: {state.get('goal', '')}\n"
         f"Hypotheses: {state.get('hypotheses', [])}\n"
         f"Previous steps: {state.get('previous_steps', [])}\n"
         f"Retrieved examples:\n{examples}\n"
+    )
+
+
+def build_repair_prompt(previous_response: str, state: dict[str, Any]) -> str:
+    return (
+        "Your previous output was invalid.\n"
+        "Rewrite it as VALID JSON only, matching this schema exactly:\n"
+        f"{TACTIC_RESPONSE_SCHEMA}\n"
+        "No markdown, no prose, no extra keys.\n"
+        f"Previous invalid output: {previous_response}\n"
+        f"Goal: {state.get('goal', '')}\n"
     )
