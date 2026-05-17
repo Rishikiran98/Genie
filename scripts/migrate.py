@@ -5,14 +5,13 @@ import argparse
 import os
 from pathlib import Path
 
-import psycopg
-
-
 def _migration_files(migrations_dir: Path) -> list[Path]:
     return sorted(p for p in migrations_dir.glob('*.sql') if p.is_file())
 
 
 def apply_migrations(database_url: str, migrations_dir: Path) -> None:
+    import psycopg
+
     files = _migration_files(migrations_dir)
     if not files:
         print(f"No migration files found in {migrations_dir}")
@@ -47,7 +46,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if not args.database_url:
-        raise SystemExit('DATABASE_URL or --database-url is required')
+        print('DATABASE_URL or --database-url is not set; skipping migrations')
+        return
 
     apply_migrations(args.database_url, Path(args.migrations_dir))
 

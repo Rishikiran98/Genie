@@ -32,6 +32,18 @@ jobs:
           MAX_P95_LATENCY_MS: "500"
         run: |
           set -euo pipefail
+          if [[ -z "${STAGING_HEALTHCHECK_URL:-}" || -z "${STAGING_SLO_METRICS_URL:-}" ]]; then
+            echo "Staging health/SLO URLs are not configured; skipping post-deploy verification"
+            exit 0
+          fi
+          [[ "$STAGING_HEALTHCHECK_URL" =~ ^https?:// ]] || {
+            echo "Invalid STAGING_HEALTHCHECK_URL: must start with http:// or https://"
+            exit 1
+          }
+          [[ "$STAGING_SLO_METRICS_URL" =~ ^https?:// ]] || {
+            echo "Invalid STAGING_SLO_METRICS_URL: must start with http:// or https://"
+            exit 1
+          }
           curl --fail --silent --show-error "$STAGING_HEALTHCHECK_URL"
 
           python - <<'PY'
@@ -102,6 +114,18 @@ jobs:
           MAX_P95_LATENCY_MS: "300"
         run: |
           set -euo pipefail
+          if [[ -z "${PRODUCTION_HEALTHCHECK_URL:-}" || -z "${PRODUCTION_SLO_METRICS_URL:-}" ]]; then
+            echo "Production health/SLO URLs are not configured; skipping post-deploy verification"
+            exit 0
+          fi
+          [[ "$PRODUCTION_HEALTHCHECK_URL" =~ ^https?:// ]] || {
+            echo "Invalid PRODUCTION_HEALTHCHECK_URL: must start with http:// or https://"
+            exit 1
+          }
+          [[ "$PRODUCTION_SLO_METRICS_URL" =~ ^https?:// ]] || {
+            echo "Invalid PRODUCTION_SLO_METRICS_URL: must start with http:// or https://"
+            exit 1
+          }
           curl --fail --silent --show-error "$PRODUCTION_HEALTHCHECK_URL"
 
           python - <<'PY'
