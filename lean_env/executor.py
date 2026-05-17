@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import tempfile
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -17,7 +19,7 @@ ResultState = Literal[
     "compile_import_failure",
     "timeout",
 ]
-ErrorCategory = Literal["timeout", "unknown_identifier", "tactic_failed", "compile_failed", "other"]
+ErrorCategory = Literal["timeout", "parse_error", "compile_error", "tactic_error", "internal_error"]
 ExecutorMode = Literal["batch", "session"]
 
 
@@ -36,99 +38,190 @@ class TacticResult:
     raw_output: str
 
 
-class LeanSession:
-    """Future-ready abstraction for persistent Lean execution backends."""
+@dataclass
+class ExecutorConfig:
+    lean_cmd: str = "lean"
+    timeout_sec: int = 5
+    max_retries: int = 1
+    retry_backoff_sec: float = 0.05
+    working_dir: str | None = None
+    isolated_env: dict[str, str] | None = None
 
-    def setup_theorem(self, theorem: str) -> None:
+
+class SessionLeanExecutor:
+    """Stable session-style interface for theorem/tactic lifecycle."""
+
+    def start_theorem(self, theorem_text: str) -> str | TacticResult:
         raise NotImplementedError
 
-    def run_tactic(self, tactic: str, depth: int) -> TacticResult:
+    def apply_tactic(self, session_id: str, tactic: str, depth: int = 0) -> TacticResult:
         raise NotImplementedError
 
-    def close(self) -> None:
-        return None
+    def close(self, session_id: str) -> None:
+        raise NotImplementedError
 
 
-class BatchLeanSession(LeanSession):
-    """Current file-based execution model that recompiles from scratch."""
+class BatchLeanExecutor(SessionLeanExecutor):
+    """Temp-file based execution model that recompiles from scratch."""
 
-    def __init__(self, lean_cmd: str, timeout_sec: int, parser: ProofStateParser):
-        self.lean_cmd = lean_cmd
-        self.timeout_sec = timeout_sec
+    def __init__(self, config: ExecutorConfig, parser: ProofStateParser):
+        self.config = config
         self.parser = parser
-        self.theorem: str | None = None
-        self.steps: list[str] = []
+        self._sessions: dict[str, tuple[str, list[str]]] = {}
 
-    def setup_theorem(self, theorem: str) -> None:
-        self.theorem = theorem
-        self.steps = []
+    def start_theorem(self, theorem_text: str) -> str:
+        session_id = str(uuid.uuid4())
+        self._sessions[session_id] = (theorem_text, [])
+        return session_id
 
-    def run_tactic(self, tactic: str, depth: int) -> TacticResult:
-        if self.theorem is None:
-            raise RuntimeError("setup_theorem must be called before run_tactic")
+    def apply_tactic(self, session_id: str, tactic: str, depth: int = 0) -> TacticResult:
+        theorem, steps = self._get_session(session_id)
+        steps.append(tactic)
+        content = self._build_file(theorem, steps)
 
-        self.steps.append(tactic)
-        content = self._build_file(self.theorem, self.steps)
+        start = time.time()
+        exec_result = self._run_lean_with_retry(content)
+        latency_ms = int((time.time() - start) * 1000)
 
+        if exec_result["timed_out"]:
+            steps.pop()
+            return TacticResult(
+                tactic=tactic,
+                success=False,
+                next_state=None,
+                error="Lean timeout",
+                proof_complete=False,
+                latency_ms=latency_ms,
+                state="timeout",
+                error_category="timeout",
+                stdout=exec_result["stdout"],
+                stderr=exec_result["stderr"],
+                raw_output=exec_result["raw_output"],
+            )
+
+        if exec_result["internal_error"]:
+            steps.pop()
+            return TacticResult(
+                tactic=tactic,
+                success=False,
+                next_state=None,
+                error=exec_result["internal_error"],
+                proof_complete=False,
+                latency_ms=latency_ms,
+                state="compile_import_failure",
+                error_category="internal_error",
+                stdout=exec_result["stdout"],
+                stderr=exec_result["stderr"],
+                raw_output=exec_result["raw_output"],
+            )
+
+        raw_output = exec_result["raw_output"]
+        state = self.parser.parse(raw_output, depth=depth)
+        result_state = self._classify_result_state(exec_result["returncode"], state.errors)
+        success = result_state == "parseable_proof_state"
+        if not success:
+            steps.pop()
+
+        proof_complete = success and state.goal == ""
+        error = None if success else (state.errors[-1] if state.errors else "Lean compilation/tactic error")
+        error_category = None if success else self._categorize_error(raw_output)
+
+        return TacticResult(
+            tactic=tactic,
+            success=success,
+            next_state=state,
+            error=error,
+            proof_complete=proof_complete,
+            latency_ms=latency_ms,
+            state=result_state,
+            error_category=error_category,
+            stdout=exec_result["stdout"],
+            stderr=exec_result["stderr"],
+            raw_output=raw_output,
+        )
+
+    def close(self, session_id: str) -> None:
+        self._sessions.pop(session_id, None)
+
+    def _get_session(self, session_id: str) -> tuple[str, list[str]]:
+        if session_id not in self._sessions:
+            raise KeyError(f"Unknown Lean session_id: {session_id}")
+        return self._sessions[session_id]
+
+    def _run_lean_with_retry(self, content: str) -> dict[str, str | int | bool | None]:
+        last_internal_error: str | None = None
+        for attempt in range(self.config.max_retries + 1):
+            outcome = self._run_lean_once(content)
+            if outcome["timed_out"]:
+                return outcome
+            if not outcome["internal_error"]:
+                return outcome
+            last_internal_error = str(outcome["internal_error"])
+            if attempt < self.config.max_retries:
+                time.sleep(self.config.retry_backoff_sec)
+
+        return {
+            "stdout": "",
+            "stderr": last_internal_error or "Unknown internal subprocess error",
+            "raw_output": last_internal_error or "Unknown internal subprocess error",
+            "returncode": 1,
+            "timed_out": False,
+            "internal_error": last_internal_error or "Unknown internal subprocess error",
+        }
+
+    def _run_lean_once(self, content: str) -> dict[str, str | int | bool | None]:
         with tempfile.TemporaryDirectory() as tmpdir:
             lean_file = Path(tmpdir) / "Scratch.lean"
             lean_file.write_text(content)
 
-            start = time.time()
+            cmd = [self.config.lean_cmd, str(lean_file)]
+            run_env = self.config.isolated_env if self.config.isolated_env is not None else os.environ.copy()
+            cwd = self.config.working_dir or os.getcwd()
+
             try:
                 proc = subprocess.run(
-                    [self.lean_cmd, str(lean_file)],
+                    cmd,
                     capture_output=True,
                     text=True,
-                    timeout=self.timeout_sec,
+                    timeout=self.config.timeout_sec,
+                    cwd=cwd,
+                    env=run_env,
+                    check=False,
                 )
-                latency_ms = int((time.time() - start) * 1000)
             except subprocess.TimeoutExpired as err:
-                latency_ms = int((time.time() - start) * 1000)
                 stdout = (err.stdout or "") if isinstance(err.stdout, str) else ""
                 stderr = (err.stderr or "") if isinstance(err.stderr, str) else ""
                 raw_output = self._join_output(stdout, stderr)
-                self.steps.pop()
-                return TacticResult(
-                    tactic=tactic,
-                    success=False,
-                    next_state=None,
-                    error="Lean timeout",
-                    proof_complete=False,
-                    latency_ms=latency_ms,
-                    state="timeout",
-                    error_category="timeout",
-                    stdout=stdout,
-                    stderr=stderr,
-                    raw_output=raw_output,
-                )
+                return {
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "raw_output": raw_output,
+                    "returncode": 124,
+                    "timed_out": True,
+                    "internal_error": None,
+                }
+            except OSError as err:
+                msg = f"Failed to execute Lean command: {err}"
+                return {
+                    "stdout": "",
+                    "stderr": msg,
+                    "raw_output": msg,
+                    "returncode": 1,
+                    "timed_out": False,
+                    "internal_error": msg,
+                }
 
             stdout = proc.stdout or ""
             stderr = proc.stderr or ""
             raw_output = self._join_output(stdout, stderr)
-            state = self.parser.parse(raw_output, depth=depth)
-
-            result_state = self._classify_result_state(proc.returncode, state.errors)
-            success = result_state == "parseable_proof_state"
-            if not success:
-                self.steps.pop()
-
-            proof_complete = success and state.goal == ""
-            error = None if success else (state.errors[-1] if state.errors else "Lean compilation/tactic error")
-
-            return TacticResult(
-                tactic=tactic,
-                success=success,
-                next_state=state,
-                error=error,
-                proof_complete=proof_complete,
-                latency_ms=latency_ms,
-                state=result_state,
-                error_category=None if success else self._categorize_error(raw_output),
-                stdout=stdout,
-                stderr=stderr,
-                raw_output=raw_output,
-            )
+            return {
+                "stdout": stdout,
+                "stderr": stderr,
+                "raw_output": raw_output,
+                "returncode": proc.returncode,
+                "timed_out": False,
+                "internal_error": None,
+            }
 
     @staticmethod
     def _build_file(theorem: str, tactics: list[str]) -> str:
@@ -145,17 +238,15 @@ class BatchLeanSession(LeanSession):
     def _classify_result_state(returncode: int, errors: list[str]) -> ResultState:
         if returncode == 0:
             return "parseable_proof_state"
-
-        if any(BatchLeanSession._looks_like_tactic_failure(e) for e in errors):
+        if any(BatchLeanExecutor._looks_like_tactic_failure(e) for e in errors):
             return "tactic_failure"
-
         return "compile_import_failure"
 
     @staticmethod
     def _looks_like_tactic_failure(error_line: str) -> bool:
         msg = error_line.lower()
         tactic_patterns = (
-            r"\btactic\b",
+            r"\\btactic\\b",
             r"no goals to be solved",
             r"unsolved goals",
             r"failed to synthesize",
@@ -166,68 +257,83 @@ class BatchLeanSession(LeanSession):
     @staticmethod
     def _categorize_error(output: str) -> ErrorCategory:
         msg = output.lower()
-        if "unknown identifier" in msg:
-            return "unknown_identifier"
         if "timeout" in msg:
             return "timeout"
+        if "parse" in msg and "error" in msg:
+            return "parse_error"
         if "tactic" in msg or "unsolved goals" in msg or "no goals" in msg:
-            return "tactic_failed"
+            return "tactic_error"
         if "error:" in msg:
-            return "compile_failed"
-        return "other"
-
-
-class SessionLeanSession(LeanSession):
-    """Stub implementation for future persistent Lean/LSP execution."""
-
-    def __init__(self, lean_cmd: str, timeout_sec: int, parser: ProofStateParser):
-        self.lean_cmd = lean_cmd
-        self.timeout_sec = timeout_sec
-        self.parser = parser
-        self.theorem: str | None = None
-
-    def setup_theorem(self, theorem: str) -> None:
-        self.theorem = theorem
-
-    def run_tactic(self, tactic: str, depth: int) -> TacticResult:
-        return TacticResult(
-            tactic=tactic,
-            success=False,
-            next_state=None,
-            error="Session mode is not implemented yet",
-            proof_complete=False,
-            latency_ms=0,
-            state="compile_import_failure",
-            error_category="other",
-            stdout="",
-            stderr="Session mode is not implemented yet",
-            raw_output="Session mode is not implemented yet",
-        )
+            return "compile_error"
+        return "internal_error"
 
 
 class LeanExecutor:
-    def __init__(self, lean_cmd: str = "lean", timeout_sec: int = 5, mode: ExecutorMode = "batch"):
-        self.lean_cmd = lean_cmd
-        self.timeout_sec = timeout_sec
+    def __init__(
+        self,
+        lean_cmd: str = "lean",
+        timeout_sec: int = 5,
+        mode: ExecutorMode = "batch",
+        *,
+        max_retries: int = 1,
+        retry_backoff_sec: float = 0.05,
+        working_dir: str | None = None,
+        isolated_env: dict[str, str] | None = None,
+    ):
         self.parser = ProofStateParser()
         self.mode = mode
-        self._session = self._create_session(mode)
+        self.config = ExecutorConfig(
+            lean_cmd=lean_cmd,
+            timeout_sec=timeout_sec,
+            max_retries=max_retries,
+            retry_backoff_sec=retry_backoff_sec,
+            working_dir=working_dir,
+            isolated_env=isolated_env,
+        )
+        self._session_backend = self._create_session_backend(mode)
+        self._default_session_id: str | None = None
 
-    def _create_session(self, mode: ExecutorMode) -> LeanSession:
-        if mode == "session":
-            return SessionLeanSession(self.lean_cmd, self.timeout_sec, self.parser)
-        return BatchLeanSession(self.lean_cmd, self.timeout_sec, self.parser)
+    def _create_session_backend(self, mode: ExecutorMode) -> SessionLeanExecutor:
+        # Session mode can wrap batch mode until a persistent Lean protocol is implemented.
+        if mode in {"batch", "session"}:
+            return BatchLeanExecutor(self.config, self.parser)
+        raise ValueError(f"Unsupported executor mode: {mode}")
 
+    def start_theorem(self, theorem_text: str) -> str | TacticResult:
+        session_id = self._session_backend.start_theorem(theorem_text)
+        if isinstance(session_id, str):
+            self._default_session_id = session_id
+        return session_id
+
+    def apply_tactic(self, session_id: str, tactic: str, depth: int = 0) -> TacticResult:
+        return self._session_backend.apply_tactic(session_id, tactic, depth=depth)
+
+    def close(self, session_id: str) -> None:
+        self._session_backend.close(session_id)
+        if self._default_session_id == session_id:
+            self._default_session_id = None
+
+    # Backward-compatible aliases
     def begin_theorem(self, theorem: str) -> None:
-        self._session.setup_theorem(theorem)
+        result = self.start_theorem(theorem)
+        if isinstance(result, TacticResult):
+            raise RuntimeError(result.error or "Failed to start theorem session")
 
     def run_tactic(self, theorem: str, previous_steps: list[str], tactic: str, depth: int) -> TacticResult:
-        # Backward-compatible stateless API.
-        self.begin_theorem(theorem)
+        session_id = self.start_theorem(theorem)
+        if isinstance(session_id, TacticResult):
+            return session_id
+        last_result: TacticResult | None = None
         for step in previous_steps:
-            _ = self._session.run_tactic(step, depth=depth)
-        return self._session.run_tactic(tactic, depth=depth)
+            last_result = self.apply_tactic(session_id, step, depth=depth)
+            if not last_result.success:
+                self.close(session_id)
+                return last_result
+        result = self.apply_tactic(session_id, tactic, depth=depth)
+        self.close(session_id)
+        return result
 
     def step_tactic(self, tactic: str, depth: int) -> TacticResult:
-        # Incremental API for session-like usage.
-        return self._session.run_tactic(tactic, depth=depth)
+        if self._default_session_id is None:
+            raise RuntimeError("No active theorem session. Call start_theorem/begin_theorem first.")
+        return self.apply_tactic(self._default_session_id, tactic, depth=depth)
