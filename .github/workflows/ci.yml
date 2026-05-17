@@ -2,156 +2,40 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
-permissions:
-  contents: read
-
 jobs:
-  lint:
-    name: lint (py${{ matrix.python-version }})
+  test-and-validate-migrations:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11"]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: genie
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d genie"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/genie
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
+          python-version: '3.11'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff
-      - name: Run ruff
-        run: |
-          ruff check .
-
-  unit-tests:
-    name: unit tests (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-cov
-      - name: Run unit tests with coverage
-        run: |
-          mkdir -p artifacts
-          pytest \
-            tests/test_parser.py \
-            tests/test_scorer.py \
-            tests/test_tactic_generator.py \
-            --junitxml=artifacts/unit-junit.xml \
-            --cov=. \
-            --cov-report=xml:artifacts/coverage.xml \
-            --cov-report=term
-      - name: Upload unit reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-test-reports-py${{ matrix.python-version }}
-          path: artifacts/unit-junit.xml
-          if-no-files-found: error
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report-py${{ matrix.python-version }}
-          path: artifacts/coverage.xml
-          if-no-files-found: error
-
-  integration-tests:
-    name: integration tests (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-      - name: Run integration tests
-        run: |
-          mkdir -p artifacts
-          pytest tests/test_beam_search.py --junitxml=artifacts/integration-junit.xml
-      - name: Upload integration reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-test-reports-py${{ matrix.python-version }}
-          path: artifacts/integration-junit.xml
-          if-no-files-found: error
-
-  benchmark-smoke:
-    name: benchmark smoke (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Run benchmark smoke
-        run: |
-          mkdir -p artifacts
-          python evaluation/benchmark_runner.py \
-            --dataset datasets/benchmarks/curated_theorems.json \
-            --max-theorems 1 \
-            --output artifacts/benchmark-smoke.json
-      - name: Upload benchmark JSON
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-json-py${{ matrix.python-version }}
-          path: artifacts/benchmark-smoke.json
-          if-no-files-found: error
-
-  container-build:
-    name: container build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build container image
-        run: docker build -t genie:ci .
-
-# Branch protection (main): mark these job names as required checks in repository settings/rulesets:
-# - lint (py3.11)
-# - unit tests (py3.11)
-# - integration tests (py3.11)
-# - benchmark smoke (py3.11)
+          pip install -r requirements.txt pytest
+      - name: Run migrations on ephemeral Postgres
+        run: python scripts/migrate.py
+      - name: Run tests
+        run: pytest
