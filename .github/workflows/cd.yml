@@ -24,11 +24,56 @@ jobs:
         run: python scripts/migrate.py
       - name: Deploy app to staging
         run: echo "Replace with staging deploy command"
-      - name: Verify staging health
+      - name: Verify staging health and SLOs
         env:
           STAGING_HEALTHCHECK_URL: ${{ secrets.STAGING_HEALTHCHECK_URL }}
+          STAGING_SLO_METRICS_URL: ${{ secrets.STAGING_SLO_METRICS_URL }}
+          MIN_AVAILABILITY: "0.99"
+          MAX_P95_LATENCY_MS: "500"
         run: |
+          set -euo pipefail
           curl --fail --silent --show-error "$STAGING_HEALTHCHECK_URL"
+
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          metrics_url = os.environ["STAGING_SLO_METRICS_URL"]
+          min_availability = float(os.environ["MIN_AVAILABILITY"])
+          max_p95_latency = float(os.environ["MAX_P95_LATENCY_MS"])
+
+          with urllib.request.urlopen(metrics_url, timeout=10) as resp:
+              payload = json.loads(resp.read().decode("utf-8"))
+
+          availability = float(payload["availability"])
+          p95_latency_ms = float(payload["p95_latency_ms"])
+
+          failures = []
+          if availability < min_availability:
+              failures.append(
+                  f"availability={availability:.5f} < minimum={min_availability:.5f}"
+              )
+          if p95_latency_ms > max_p95_latency:
+              failures.append(
+                  f"p95_latency_ms={p95_latency_ms:.2f} > maximum={max_p95_latency:.2f}"
+              )
+
+          if failures:
+              print("Post-deploy staging verification failed:\n- " + "\n- ".join(failures))
+              sys.exit(1)
+
+          print("Post-deploy staging verification passed.")
+          PY
+
+      - name: Roll back staging to previous stable revision
+        if: failure()
+        env:
+          STAGING_PREVIOUS_STABLE_REVISION: ${{ secrets.STAGING_PREVIOUS_STABLE_REVISION }}
+        run: |
+          echo "Rolling back staging to ${STAGING_PREVIOUS_STABLE_REVISION}"
+          echo "Replace with staging rollback command"
 
   deploy-production:
     runs-on: ubuntu-latest
@@ -49,3 +94,53 @@ jobs:
         run: python scripts/migrate.py
       - name: Deploy app to production
         run: echo "Replace with production deploy command"
+      - name: Verify production health and SLOs
+        env:
+          PRODUCTION_HEALTHCHECK_URL: ${{ secrets.PRODUCTION_HEALTHCHECK_URL }}
+          PRODUCTION_SLO_METRICS_URL: ${{ secrets.PRODUCTION_SLO_METRICS_URL }}
+          MIN_AVAILABILITY: "0.999"
+          MAX_P95_LATENCY_MS: "300"
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$PRODUCTION_HEALTHCHECK_URL"
+
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          metrics_url = os.environ["PRODUCTION_SLO_METRICS_URL"]
+          min_availability = float(os.environ["MIN_AVAILABILITY"])
+          max_p95_latency = float(os.environ["MAX_P95_LATENCY_MS"])
+
+          with urllib.request.urlopen(metrics_url, timeout=10) as resp:
+              payload = json.loads(resp.read().decode("utf-8"))
+
+          availability = float(payload["availability"])
+          p95_latency_ms = float(payload["p95_latency_ms"])
+
+          failures = []
+          if availability < min_availability:
+              failures.append(
+                  f"availability={availability:.5f} < minimum={min_availability:.5f}"
+              )
+          if p95_latency_ms > max_p95_latency:
+              failures.append(
+                  f"p95_latency_ms={p95_latency_ms:.2f} > maximum={max_p95_latency:.2f}"
+              )
+
+          if failures:
+              print("Post-deploy production verification failed:\n- " + "\n- ".join(failures))
+              sys.exit(1)
+
+          print("Post-deploy production verification passed.")
+          PY
+
+      - name: Roll back production to previous stable revision
+        if: failure()
+        env:
+          PRODUCTION_PREVIOUS_STABLE_REVISION: ${{ secrets.PRODUCTION_PREVIOUS_STABLE_REVISION }}
+        run: |
+          echo "Rolling back production to ${PRODUCTION_PREVIOUS_STABLE_REVISION}"
+          echo "Replace with production rollback command"
