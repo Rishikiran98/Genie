@@ -6,25 +6,28 @@ from dataclasses import dataclass
 
 @dataclass
 class ParsedProofState:
-    goal: str
-    active_goals: list[str]
-    primary_goal: str
+    primary_goal: str | None
+    goals: list[str]
     hypotheses: list[str]
     local_context: list[str]
-    goal_contexts: list[dict[str, list[str] | str]]
-    errors: list[str]
     warnings: list[str]
+    errors: list[str]
     depth: int
     raw_output: str
+
+    @property
+    def goal(self) -> str:
+        return self.primary_goal or ""
+
+    @property
+    def active_goals(self) -> list[str]:
+        return self.goals
 
 
 class ProofStateParser:
     """Parse Lean stdout/stderr into structured proof state."""
 
     GOAL_PATTERN = re.compile(r"⊢\s*(.+)")
-    HYPOTHESIS_PATTERN = re.compile(
-        r"^(?:[A-Za-z_][\w'₀-₉]*\s*)+\s*:\s*.+$"
-    )
 
     def parse(self, output: str, depth: int = 0) -> ParsedProofState:
         lines = output.splitlines()
@@ -59,22 +62,20 @@ class ProofStateParser:
                 current_local_context.clear()
                 continue
 
-            if self.HYPOTHESIS_PATTERN.match(s):
+            if ":" in s and not s.startswith("⊢") and not s.startswith("case "):
                 current_hypotheses.append(s)
 
-        active_goals = [item["goal"] for item in goal_contexts]
-        primary_goal = active_goals[-1] if active_goals else ""
+        goals = [item["goal"] for item in goal_contexts]
+        primary_goal = goals[-1] if goals else None
 
         errors = [line.strip() for line in lines if "error:" in line.lower()]
         warnings = [line.strip() for line in lines if "warning:" in line.lower()]
 
         return ParsedProofState(
-            goal=primary_goal,
-            active_goals=active_goals,
             primary_goal=primary_goal,
+            goals=goals,
             hypotheses=goal_contexts[-1]["hypotheses"] if goal_contexts else [],
             local_context=goal_contexts[-1]["local_context"] if goal_contexts else [],
-            goal_contexts=goal_contexts,
             errors=errors,
             warnings=warnings,
             depth=depth,

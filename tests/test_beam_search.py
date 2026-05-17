@@ -39,12 +39,10 @@ class FakeGenerator:
 def mk_state(goal: str, hyps=None):
     hyps = hyps or []
     return ParsedProofState(
-        goal=goal,
-        active_goals=[goal] if goal else [],
-        primary_goal=goal,
+        primary_goal=goal or None,
+        goals=[goal] if goal else [],
         hypotheses=hyps,
         local_context=[],
-        goal_contexts=[],
         errors=[],
         warnings=[],
         depth=0,
