@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from utils.run_logger import JsonlRunLogger
+
 from lean_env.executor import LeanExecutor
 from policy_model.tactic_generator import TacticGenerator
 from search.scorer import ScoringConfig, score_transition
@@ -61,7 +63,7 @@ class BeamSearchProver:
                 return float(sum(sims) / len(sims))
         return None
 
-    def prove(self, theorem: str, initial_goal: str, retrieve_fn=None):
+    def prove(self, theorem: str, initial_goal: str, retrieve_fn=None, logger: JsonlRunLogger | None = None):
         frontier = [StateNode(goal=initial_goal, hypotheses=[], history=[], depth=0)]
         visited = set()
         transition_seen: set[tuple[str, str]] = set()
@@ -86,9 +88,35 @@ class BeamSearchProver:
                 retrieved = retrieve_fn(state) if retrieve_fn else []
                 retrieval_similarity = self._extract_retrieval_similarity(retrieved)
                 tactics = self.generator.generate(state, retrieved, k=self.config.candidates_per_node)
+                if logger:
+                    logger.log(
+                        "node_expansion",
+                        {
+                            "depth": depth,
+                            "state_snapshot_hash": logger.state_snapshot_hash(node.goal, node.hypotheses, node.history),
+                            "candidate_tactics": tactics,
+                        },
+                    )
 
                 for tactic in tactics:
                     result = self.executor.run_tactic(theorem, node.history, tactic, depth + 1)
+                    if logger:
+                        logger.log(
+                            "tactic_result",
+                            {
+                                "depth": depth + 1,
+                                "state_snapshot_hash": logger.state_snapshot_hash(node.goal, node.hypotheses, node.history),
+                                "tactic": tactic,
+                                "executor_result": {
+                                    "success": result.success,
+                                    "proof_complete": result.proof_complete,
+                                    "timed_out": bool(getattr(result, "timed_out", False)),
+                                    "next_goal": result.next_state.goal if result.next_state else None,
+                                    "next_hypotheses": result.next_state.hypotheses if result.next_state else None,
+                                    "error": result.error,
+                                },
+                            },
+                        )
                     timed_out = bool(getattr(result, "timed_out", False))
                     is_invalid = (result.next_state is None) or (not result.success and not timed_out)
                     repeated_transition = (state_key, tactic.strip()) in transition_seen
@@ -146,6 +174,14 @@ class BeamSearchProver:
                 )
             candidates.sort(key=lambda n: n.score, reverse=True)
             frontier = candidates[: self.config.beam_width]
+            if logger:
+                logger.log(
+                    "branch_selection",
+                    {
+                        "depth": depth,
+                        "selected_branch_decision": [n.history for n in frontier],
+                    },
+                )
             if frontier and frontier[0].score > best_node.score:
                 best_node = frontier[0]
 
