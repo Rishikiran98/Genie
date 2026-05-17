@@ -25,6 +25,7 @@ def score_transition(
     timed_out: bool = False,
     repeated_action: bool = False,
     repeated_state: bool = False,
+    repeated_transition: bool = False,
     retrieval_similarity: float | None = None,
 ) -> float:
     cfg = config or ScoringConfig()
@@ -40,7 +41,9 @@ def score_transition(
         base += cfg.invalid_tactic_weight
     if timed_out:
         base += cfg.timeout_weight
-    if repeated_action:
+    # `repeated_transition` is kept for backwards compatibility and maps
+    # to the repeated action penalty semantics.
+    if repeated_action or repeated_transition:
         base += cfg.repeated_action_weight
     if repeated_state:
         base += cfg.repeated_state_weight
