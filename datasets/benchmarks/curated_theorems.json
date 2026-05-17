@@ -1,0 +1,12 @@
+{
+  "theorems": [
+    {"theorem": "nat.add_zero", "solved": true, "depth": 3, "invalid_tactics": 0, "total_tactics": 4, "timed_out": false, "latency_s": 0.74},
+    {"theorem": "nat.zero_add", "solved": true, "depth": 4, "invalid_tactics": 0, "total_tactics": 5, "timed_out": false, "latency_s": 0.79},
+    {"theorem": "nat.add_assoc", "solved": true, "depth": 7, "invalid_tactics": 1, "total_tactics": 9, "timed_out": false, "latency_s": 1.43},
+    {"theorem": "nat.add_comm", "solved": true, "depth": 8, "invalid_tactics": 1, "total_tactics": 10, "timed_out": false, "latency_s": 1.92},
+    {"theorem": "nat.mul_zero", "solved": true, "depth": 5, "invalid_tactics": 0, "total_tactics": 6, "timed_out": false, "latency_s": 1.12},
+    {"theorem": "nat.zero_mul", "solved": true, "depth": 5, "invalid_tactics": 0, "total_tactics": 6, "timed_out": false, "latency_s": 1.09},
+    {"theorem": "nat.mul_assoc", "solved": false, "depth": 18, "invalid_tactics": 4, "total_tactics": 14, "timed_out": true, "latency_s": 12.0},
+    {"theorem": "nat.left_distrib", "solved": false, "depth": 16, "invalid_tactics": 3, "total_tactics": 12, "timed_out": true, "latency_s": 12.0}
+  ]
+}
