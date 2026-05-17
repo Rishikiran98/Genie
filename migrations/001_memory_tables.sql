@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS theorems (
 
 CREATE INDEX IF NOT EXISTS idx_transitions_trace_id ON transitions(trace_id);
 CREATE INDEX IF NOT EXISTS idx_transitions_success ON transitions(success);
-CREATE INDEX IF NOT EXISTS idx_transitions_embedding_cosine
-    ON transitions USING ivfflat (state_embedding vector_cosine_ops) WITH (lists = 100);
+-- NOTE: `ivfflat` with `vector_cosine_ops` requires vector dimensions > 1.
+-- Our current deterministic placeholder embedding is 1-D, so avoid creating
+-- an ANN index until embeddings are upgraded to higher-dimensional vectors.
 CREATE INDEX IF NOT EXISTS idx_traces_theorem_family_tags ON traces USING GIN (theorem_family_tags);
 CREATE INDEX IF NOT EXISTS idx_theorems_theorem_family_tags ON theorems USING GIN (theorem_family_tags);
