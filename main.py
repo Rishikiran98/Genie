@@ -33,9 +33,11 @@ def main() -> None:
     logger.log_final(
         outcome=result.status,
         extra={
-            "explored_nodes": result.explored_nodes,
-            "failed_tactics": result.failed_tactics,
-            "best_partial_branch": result.best_partial_branch,
+            "nodes_expanded": result.nodes_expanded,
+            "branches_pruned": result.branches_pruned,
+            "timeouts": result.timeouts,
+            "invalid_count": result.invalid_count,
+            "best_partial": result.best_partial,
             "log_path": logger.path,
         },
     )

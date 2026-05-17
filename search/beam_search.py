@@ -16,18 +16,23 @@ class SearchConfig:
     beam_width: int = 5
     max_depth: int = 20
     candidates_per_node: int = 5
-    invalid_tactic_penalty: float = -12.0
-    timeout_penalty: float = -18.0
-    repeated_transition_penalty: float = -3.0
-    retrieval_similarity_weight: float = 2.0
+    success_weight: float = 100.0
+    depth_weight: float = 0.5
+    timeout_weight: float = -18.0
+    invalid_tactic_weight: float = -12.0
+    repeated_action_weight: float = -3.0
+    repeated_state_weight: float = -5.0
+    retrieval_bonus_weight: float = 2.0
 
 
 @dataclass
 class SearchResult:
     status: str
-    explored_nodes: int
-    failed_tactics: dict[str, int]
-    best_partial_branch: list[str]
+    nodes_expanded: int
+    branches_pruned: int
+    timeouts: int
+    invalid_count: int
+    best_partial: list[str]
     proof: StateNode | None = None
 
 
@@ -37,20 +42,14 @@ class BeamSearchProver:
         self.generator = generator
         self.config = config or SearchConfig()
         self._scoring = ScoringConfig(
-            invalid_tactic_penalty=self.config.invalid_tactic_penalty,
-            timeout_penalty=self.config.timeout_penalty,
-            repeated_transition_penalty=self.config.repeated_transition_penalty,
-            retrieval_similarity_weight=self.config.retrieval_similarity_weight,
+            success_weight=self.config.success_weight,
+            depth_weight=self.config.depth_weight,
+            timeout_weight=self.config.timeout_weight,
+            invalid_tactic_weight=self.config.invalid_tactic_weight,
+            repeated_action_weight=self.config.repeated_action_weight,
+            repeated_state_weight=self.config.repeated_state_weight,
+            retrieval_bonus_weight=self.config.retrieval_bonus_weight,
         )
-
-    @staticmethod
-    def _normalize_text(text: str) -> str:
-        return " ".join(text.split()).strip().lower()
-
-    def _state_hash(self, node: StateNode) -> str:
-        normalized_goal = self._normalize_text(node.goal)
-        normalized_ctx = sorted(self._normalize_text(h) for h in node.hypotheses)
-        return f"{normalized_goal}||{'|'.join(normalized_ctx)}"
 
     @staticmethod
     def _extract_retrieval_similarity(retrieved: Any) -> float | None:
@@ -67,16 +66,19 @@ class BeamSearchProver:
         frontier = [StateNode(goal=initial_goal, hypotheses=[], history=[], depth=0)]
         visited = set()
         transition_seen: set[tuple[str, str]] = set()
-        explored_nodes = 0
-        failed_tactics = {"invalid": 0, "timeout": 0, "other": 0}
+        nodes_expanded = 0
+        branches_pruned = 0
+        timeout_count = 0
+        invalid_count = 0
         best_node = frontier[0]
 
         for depth in range(self.config.max_depth):
             candidates: list[StateNode] = []
             for node in frontier:
-                explored_nodes += 1
-                state_key = self._state_hash(node)
+                nodes_expanded += 1
+                state_key = node.normalized_state_hash()
                 if state_key in visited:
+                    branches_pruned += 1
                     continue
                 visited.add(state_key)
 
@@ -119,20 +121,18 @@ class BeamSearchProver:
                         )
                     timed_out = bool(getattr(result, "timed_out", False))
                     is_invalid = (result.next_state is None) or (not result.success and not timed_out)
-                    repeated_transition = (state_key, tactic.strip()) in transition_seen
+                    repeated_action = (state_key, tactic.strip()) in transition_seen
                     transition_seen.add((state_key, tactic.strip()))
 
                     if result.next_state is None:
                         if timed_out:
-                            failed_tactics["timeout"] += 1
+                            timeout_count += 1
                         else:
-                            failed_tactics["invalid"] += 1
+                            invalid_count += 1
                         continue
 
                     if not result.success and timed_out:
-                        failed_tactics["timeout"] += 1
-                    elif not result.success:
-                        failed_tactics["other"] += 1
+                        timeout_count += 1
 
                     next_node = StateNode(
                         goal=result.next_state.goal,
@@ -149,7 +149,8 @@ class BeamSearchProver:
                         config=self._scoring,
                         invalid_tactic=is_invalid,
                         timed_out=timed_out,
-                        repeated_transition=repeated_transition,
+                        repeated_action=repeated_action,
+                        repeated_state=next_node.normalized_state_hash() in visited,
                         retrieval_similarity=retrieval_similarity,
                     )
                     candidates.append(next_node)
@@ -158,21 +159,27 @@ class BeamSearchProver:
                     if result.proof_complete:
                         return SearchResult(
                             status="solved",
-                            explored_nodes=explored_nodes,
-                            failed_tactics=failed_tactics,
-                            best_partial_branch=next_node.history,
+                            nodes_expanded=nodes_expanded,
+                            branches_pruned=branches_pruned,
+                            timeouts=timeout_count,
+                            invalid_count=invalid_count,
+                            best_partial=next_node.history,
                             proof=next_node,
                         )
 
             if not candidates:
                 return SearchResult(
                     status="exhausted",
-                    explored_nodes=explored_nodes,
-                    failed_tactics=failed_tactics,
-                    best_partial_branch=best_node.history,
+                    nodes_expanded=nodes_expanded,
+                    branches_pruned=branches_pruned,
+                    timeouts=timeout_count,
+                    invalid_count=invalid_count,
+                    best_partial=best_node.history,
                     proof=None,
                 )
             candidates.sort(key=lambda n: n.score, reverse=True)
+            if len(candidates) > self.config.beam_width:
+                branches_pruned += len(candidates) - self.config.beam_width
             frontier = candidates[: self.config.beam_width]
             if logger:
                 logger.log(
@@ -187,8 +194,10 @@ class BeamSearchProver:
 
         return SearchResult(
             status="timeout",
-            explored_nodes=explored_nodes,
-            failed_tactics=failed_tactics,
-            best_partial_branch=best_node.history,
+            nodes_expanded=nodes_expanded,
+            branches_pruned=branches_pruned,
+            timeouts=timeout_count,
+            invalid_count=invalid_count,
+            best_partial=best_node.history,
             proof=None,
         )

@@ -65,8 +65,8 @@ class TestBeamSearchBehavior(unittest.TestCase):
         result = prover.prove("theorem t : True := by", "⊢ True")
 
         self.assertEqual(result.status, "solved")
-        self.assertEqual(result.best_partial_branch, ["good"])
-        self.assertEqual(result.failed_tactics["invalid"], 0)
+        self.assertEqual(result.best_partial, ["good"])
+        self.assertEqual(result.invalid_count, 0)
 
     def test_early_stop_on_first_proof_complete(self):
         generator = FakeGenerator({(): ["finish", "other"]})
@@ -80,7 +80,7 @@ class TestBeamSearchBehavior(unittest.TestCase):
         result = prover.prove("theorem t : True := by", "⊢ True")
 
         self.assertEqual(result.status, "solved")
-        self.assertEqual(result.best_partial_branch, ["finish"])
+        self.assertEqual(result.best_partial, ["finish"])
         self.assertIsNotNone(result.proof)
 
 
