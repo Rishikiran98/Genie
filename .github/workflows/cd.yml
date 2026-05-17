@@ -1,0 +1,145 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  IMAGE_NAME: genie
+
+jobs:
+  build-and-publish:
+    name: Build and publish image
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (staging)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker authentication
+        run: gcloud auth configure-docker "${{ secrets.GAR_LOCATION }}-docker.pkg.dev" --quiet
+
+      - name: Build and push image
+        id: meta
+        run: |
+          IMAGE_URI="${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPOSITORY }}/${IMAGE_NAME}:${GITHUB_SHA}"
+          docker build -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+  deploy-staging:
+    name: Deploy to staging Cloud Run
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Authenticate to Google Cloud (staging)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy image to staging service
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ secrets.CLOUD_RUN_SERVICE }}
+          region: ${{ secrets.CLOUD_RUN_REGION }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          image: ${{ needs.build-and-publish.outputs.image }}
+          flags: >-
+            --no-traffic
+            --tag=staging
+
+      - name: Gradual rollout to staging (no downtime)
+        run: |
+          gcloud run services update-traffic "${{ secrets.CLOUD_RUN_SERVICE }}" \
+            --region "${{ secrets.CLOUD_RUN_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --to-tags staging=10,LATEST=90
+          sleep 20
+          gcloud run services update-traffic "${{ secrets.CLOUD_RUN_SERVICE }}" \
+            --region "${{ secrets.CLOUD_RUN_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --to-tags staging=50,LATEST=50
+          sleep 20
+          gcloud run services update-traffic "${{ secrets.CLOUD_RUN_SERVICE }}" \
+            --region "${{ secrets.CLOUD_RUN_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --to-tags staging=100
+
+  smoke-checks:
+    name: Smoke checks (staging)
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Health check
+        run: |
+          URL="${{ secrets.SMOKE_BASE_URL }}"
+          test -n "$URL"
+          curl --fail --show-error --silent "$URL/healthz"
+
+      - name: Ready check
+        run: |
+          URL="${{ secrets.SMOKE_BASE_URL }}"
+          curl --fail --show-error --silent "$URL/readyz"
+
+  deploy-production:
+    name: Deploy to production Cloud Run
+    needs: smoke-checks
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Authenticate to Google Cloud (production)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy image to production service
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ secrets.CLOUD_RUN_SERVICE }}
+          region: ${{ secrets.CLOUD_RUN_REGION }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          image: ${{ needs.build-and-publish.outputs.image }}
+          flags: >-
+            --no-traffic
+            --tag=candidate
+
+      - name: Gradual rollout to production (no downtime)
+        run: |
+          gcloud run services update-traffic "${{ secrets.CLOUD_RUN_SERVICE }}" \
+            --region "${{ secrets.CLOUD_RUN_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --to-tags candidate=5,LATEST=95
+          sleep 60
+          gcloud run services update-traffic "${{ secrets.CLOUD_RUN_SERVICE }}" \
+            --region "${{ secrets.CLOUD_RUN_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --to-tags candidate=25,LATEST=75
+          sleep 120
+          gcloud run services update-traffic "${{ secrets.CLOUD_RUN_SERVICE }}" \
+            --region "${{ secrets.CLOUD_RUN_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --to-tags candidate=100
