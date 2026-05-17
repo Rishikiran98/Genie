@@ -5,10 +5,10 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from configs.policy_model import TacticModelConfig, load_tactic_model_config
-from policy_model.prompt_builder import build_tactic_prompt
+from policy_model.prompt_builder import TACTIC_RESPONSE_SCHEMA, build_repair_prompt, build_tactic_prompt
 
 
 class LLMClient(Protocol):
@@ -58,16 +58,8 @@ class OpenAICompatibleClient:
 
 
 class TacticGenerator:
-    INVALID_PATTERNS = (
-        "```",
-        "sorry",
-        "admit",
-        "TODO",
-        "<insert",
-        "I cannot",
-        "as an ai",
-        "explain",
-    )
+    INVALID_PATTERNS = ("```", "sorry", "admit", "todo", "<insert", "i cannot", "as an ai", "explain")
+    INVALID_TOKEN_PATTERN = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 
     def __init__(self, client: LLMClient | None = None, config: TacticModelConfig | None = None):
         self.config = config or load_tactic_model_config()
@@ -78,7 +70,7 @@ class TacticGenerator:
             return OpenAICompatibleClient(config=config)
         return HeuristicFallbackClient()
 
-    def _repair_json(self, raw: str) -> dict | None:
+    def _repair_json(self, raw: str) -> dict[str, Any] | None:
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
@@ -96,6 +88,27 @@ class TacticGenerator:
                 continue
         return None
 
+    def _validate_schema(self, parsed: Any) -> bool:
+        schema = TACTIC_RESPONSE_SCHEMA
+        if not isinstance(parsed, dict):
+            return False
+        if set(parsed.keys()) != set(schema["required"]):
+            return False
+        tactics = parsed.get("tactics")
+        if not isinstance(tactics, list):
+            return False
+        if not (schema["properties"]["tactics"]["minItems"] <= len(tactics) <= schema["properties"]["tactics"]["maxItems"]):
+            return False
+        for tactic in tactics:
+            if not isinstance(tactic, str):
+                return False
+            stripped = tactic.strip()
+            if not stripped:
+                return False
+            if len(stripped) > schema["properties"]["tactics"]["items"]["maxLength"]:
+                return False
+        return True
+
     def _sanitize_tactics(self, tactics: list[str], k: int) -> list[str]:
         uniq: list[str] = []
         seen: set[str] = set()
@@ -103,8 +116,10 @@ class TacticGenerator:
             normalized = " ".join(tactic.strip().split())
             if not normalized or len(normalized) > 256:
                 continue
+            if self.INVALID_TOKEN_PATTERN.search(normalized):
+                continue
             lower = normalized.lower()
-            if any(pattern in lower for pattern in (p.lower() for p in self.INVALID_PATTERNS)):
+            if any(pattern in lower for pattern in self.INVALID_PATTERNS):
                 continue
             if normalized not in seen:
                 seen.add(normalized)
@@ -113,16 +128,24 @@ class TacticGenerator:
                 break
         return uniq
 
-    def generate(self, state: dict, retrieved_traces: list[dict] | None = None, k: int = 5) -> list[str]:
+    def _safe_fallback_tactics(self, k: int) -> list[str]:
+        return ["simp", "rfl", "aesop", "constructor", "assumption"][:k]
+
+    def generate(self, state: dict, retrieved_traces: list[dict] | None = None, k: int | None = None) -> list[str]:
+        target_k = max(1, k if k is not None else self.config.top_k)
         prompt = build_tactic_prompt(state, retrieved_traces)
+
         raw = self.client.complete(prompt)
-
         parsed = self._repair_json(raw)
-        if not isinstance(parsed, dict):
-            parsed = {"tactics": ["simp", "rfl"]}
 
-        raw_tactics = parsed.get("tactics", [])
-        tactics = [t for t in raw_tactics if isinstance(t, str)]
+        if not self._validate_schema(parsed):
+            repair_prompt = build_repair_prompt(raw, state)
+            repaired_raw = self.client.complete(repair_prompt)
+            parsed = self._repair_json(repaired_raw)
 
-        sanitized = self._sanitize_tactics(tactics, k=k)
-        return sanitized or ["simp", "rfl"][:k]
+        if not self._validate_schema(parsed):
+            return self._safe_fallback_tactics(target_k)
+
+        tactics = parsed["tactics"]
+        sanitized = self._sanitize_tactics(tactics, k=target_k)
+        return sanitized or self._safe_fallback_tactics(target_k)
