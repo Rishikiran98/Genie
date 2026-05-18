@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from evaluation.metrics import compute_metrics
 
@@ -21,6 +26,7 @@ class TheoremResult:
 
 
 DEFAULT_CONFIG_PATH = Path("configs/benchmark.yaml")
+LATEST_REPORT_NAME = "latest_benchmark.json"
 
 
 def load_simple_yaml(path: Path) -> dict[str, Any]:
@@ -99,9 +105,21 @@ def build_human_summary(report: dict[str, Any]) -> str:
     )
 
 
-def run_benchmark(config_path: Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
+def _write_json_report(report: dict[str, Any], output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2)
+        f.write("\n")
+
+
+def run_benchmark(
+    config_path: Path = DEFAULT_CONFIG_PATH,
+    *,
+    suite_path: Path | None = None,
+    output_path: Path | None = None,
+) -> dict[str, Any]:
     config = load_simple_yaml(config_path)
-    suite_path = Path(config["suite_path"])
+    suite_path = suite_path or Path(config["suite_path"])
     baseline_path = Path(config["baseline_path"])
     thresholds_path = Path(config["thresholds_path"])
 
@@ -122,15 +140,44 @@ def run_benchmark(config_path: Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
     }
     report["summary"] = build_human_summary(report)
 
-    report_output_path = Path(config["report_output_path"])
-    report_output_path.parent.mkdir(parents=True, exist_ok=True)
-    with report_output_path.open("w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2)
-        f.write("\n")
+    report_output_path = output_path or Path(config["report_output_path"])
+    _write_json_report(report, report_output_path)
+
+    latest_report_path = report_output_path.with_name(LATEST_REPORT_NAME)
+    if latest_report_path != report_output_path:
+        _write_json_report(report, latest_report_path)
 
     return report
 
 
-if __name__ == "__main__":
-    benchmark_report = run_benchmark()
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the curated theorem benchmark suite.")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help="Path to the benchmark YAML config file.",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=Path,
+        default=None,
+        help="Optional benchmark dataset path overriding the config suite_path.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional JSON report path overriding the config report_output_path.",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    benchmark_report = run_benchmark(args.config, suite_path=args.dataset, output_path=args.output)
     print(benchmark_report["summary"])
+
+
+if __name__ == "__main__":
+    main()
