@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 import unittest
 
-from search.beam_search import BeamSearchProver, SearchConfig
 from lean_env.parser import ParsedProofState
+from search.beam_search import BeamSearchProver, SearchConfig
 
 
 @dataclass
@@ -33,6 +33,7 @@ class FakeGenerator:
 
     def generate(self, state, retrieved_traces=None, k=5):
         _ = retrieved_traces
+        _ = k
         return self.mapping[tuple(state["previous_steps"])]
 
 
@@ -50,7 +51,7 @@ def mk_state(goal: str, hyps=None):
     )
 
 
-class TestBeamSearchBehavior(unittest.TestCase):
+class TestExecutorWithMockedSearchLoop(unittest.TestCase):
     def test_branch_selection_prefers_highest_scoring_candidates(self):
         generator = FakeGenerator({(): ["slow", "good", "bad"], ("good",): ["finish"]})
         executor = FakeExecutor(
