@@ -4,7 +4,7 @@ import unittest
 from lean_env.parser import ProofStateParser
 
 
-FIXTURES = Path(__file__).resolve().parents[1] / "lean_env" / "fixtures"
+FIXTURES = Path(__file__).resolve().parents[2] / "lean_env" / "fixtures"
 
 
 class TestProofStateParserFromFixtures(unittest.TestCase):
