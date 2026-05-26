@@ -1,0 +1,5 @@
+α : Type
+x : α
+⊢ x = x
+error: tactic 'simp' failed, did not simplify goal
+warning: try `simp?` to inspect simplification lemmas

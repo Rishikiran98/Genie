@@ -1,0 +1,5 @@
+benchmark_name: curated_theorems_v1
+suite_path: datasets/benchmarks/curated_theorems.json
+baseline_path: datasets/benchmarks/baseline_run.json
+thresholds_path: datasets/benchmarks/regression_thresholds.json
+report_output_path: datasets/runs/benchmark_report.json

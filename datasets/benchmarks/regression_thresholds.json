@@ -1,0 +1,8 @@
+{
+  "min_solve_rate": 0.70,
+  "max_avg_depth": 10.0,
+  "max_median_depth": 8.0,
+  "max_invalid_tactic_rate": 0.20,
+  "max_timeout_rate": 0.30,
+  "max_mean_latency_per_theorem_s": 5.0
+}
