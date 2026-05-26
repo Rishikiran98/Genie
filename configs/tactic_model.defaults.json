@@ -1,0 +1,6 @@
+{
+  "provider": "heuristic",
+  "model": "gpt-4o-mini",
+  "temperature": 0.0,
+  "top_k": 5
+}

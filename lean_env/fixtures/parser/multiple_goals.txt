@@ -1,0 +1,10 @@
+case left
+α : Type
+x y : α
+h : x = y
+⊢ y = x
+
+case right
+n : Nat
+h₁ : n > 0
+⊢ n + 0 = n
