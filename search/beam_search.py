@@ -19,13 +19,23 @@ class SearchConfig:
     candidates_per_node: int = 5
 
 
+@dataclass
+class SearchResult:
+    status: str
+    node: StateNode | None
+
+    @property
+    def history(self) -> list[str]:
+        return self.node.history if self.node else []
+
+
 class BeamSearchProver:
     def __init__(self, executor: ExecutorProtocol, generator: TacticGenerator, config: SearchConfig | None = None):
         self.executor = executor
         self.generator = generator
         self.config = config or SearchConfig()
 
-    def prove(self, theorem: str, initial_goal: str, retrieve_fn=None):
+    def prove(self, theorem: str, initial_goal: str, retrieve_fn=None) -> SearchResult:
         frontier = [StateNode(goal=initial_goal, hypotheses=[], history=[], depth=0)]
         visited = set()
 
@@ -49,8 +59,9 @@ class BeamSearchProver:
                     result = self.executor.run_tactic(theorem, node.history, tactic, depth + 1)
                     if result.next_state is None:
                         continue
+                    next_goal = getattr(result.next_state, "primary_goal", None) or getattr(result.next_state, "goal", "")
                     next_node = StateNode(
-                        goal=result.next_state.goal,
+                        goal=next_goal,
                         hypotheses=result.next_state.hypotheses,
                         history=node.history + [tactic],
                         depth=depth + 1,
@@ -64,11 +75,12 @@ class BeamSearchProver:
                     )
                     candidates.append(next_node)
                     if result.proof_complete:
-                        return next_node
+                        return SearchResult(status="solved", node=next_node)
 
             if not candidates:
-                return None
+                return SearchResult(status="exhausted", node=None)
             candidates.sort(key=lambda n: n.score, reverse=True)
             frontier = candidates[: self.config.beam_width]
 
-        return None
+        best = frontier[0] if frontier else None
+        return SearchResult(status="exhausted", node=best)
