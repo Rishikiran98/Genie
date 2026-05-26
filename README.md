@@ -1,75 +1,84 @@
 # Genie
-Self-Learning Theorem Proving Agent
 
-## API Service (`service/`)
+Self-Learning Theorem Proving Agent.
 
-Run locally:
+## What this repository is
+
+Genie is an early-stage theorem-proving agent scaffold that combines:
+- Lean verification
+- proof-state parsing
+- tactic proposal
+- beam search
+- retrieval/memory
+- training/evaluation utilities
+
+## Current status
+
+This project is currently in scaffold/MVP stage. The core modules are present, but robust Lean runtime integration and production workflows are still in progress.
+
+## Prerequisites
+
+- Python 3.11+ (3.12 tested in this environment)
+- Lean 4 toolchain available on `PATH` as `lean`
+- (Optional, later phases) Mathlib project tooling and model/provider credentials
+
+## Quickstart
+
+1. Clone and enter the repo:
 
 ```bash
-uvicorn service.api:app --host 0.0.0.0 --port 8080
+git clone <your-fork-or-repo-url>
+cd Genie
 ```
 
-### Endpoints
-
-- `POST /prove` — submit theorem proving job.
-- `GET /jobs/{id}` — get job status and result.
-- `GET /healthz` — health check.
-
-Example request:
+2. (Recommended) Create a virtual environment:
 
 ```bash
-curl -X POST http://localhost:8080/prove \
-  -H "Authorization: Bearer $API_AUTH_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"theorem":"theorem add_zero (n : Nat) : n + 0 = n := by", "initial_goal":"n + 0 = n"}'
+python -m venv .venv
+source .venv/bin/activate
 ```
 
-### Queue + Worker
-
-`QUEUE_BACKEND` options:
-- `memory` (default): in-process queue + background worker thread.
-- `cloudtasks`: `POST /prove` enqueues a Cloud Task that calls `/internal/jobs/process`.
-
-### Job Store
-
-- `USE_FIRESTORE=false` (default): in-memory store.
-- `USE_FIRESTORE=true`: persistent Firestore-backed job storage (collection `jobs`).
-
-### Guardrails
-
-- Auth token check via `Authorization: Bearer $API_AUTH_TOKEN`.
-- Request-size cap (`MAX_REQUEST_CHARS`).
-- Per-minute request limit (`MAX_REQUESTS_PER_MINUTE`).
-- Max search depth cap (`MAX_DEPTH_CAP`).
-- Max timeout cap (`MAX_TIMEOUT_SECONDS_CAP`).
-
-### Environment variables
-
-- `API_AUTH_TOKEN` (recommended in all environments)
-- `QUEUE_BACKEND` = `memory|cloudtasks`
-- `USE_FIRESTORE` = `true|false`
-- `MAX_REQUEST_CHARS` (default `8000`)
-- `MAX_REQUESTS_PER_MINUTE` (default `60`)
-- `DEFAULT_DEPTH` (default `8`)
-- `DEFAULT_TIMEOUT_SECONDS` (default `30`)
-- `MAX_DEPTH_CAP` (default `12`)
-- `MAX_TIMEOUT_SECONDS_CAP` (default `120`)
-- `WORKER_POLL_INTERVAL_SECONDS` (default `0.2`, memory queue only)
-
-Cloud Tasks specific:
-- `GCP_PROJECT`
-- `GCP_REGION`
-- `CLOUD_TASKS_QUEUE`
-- `WORKER_BASE_URL` (public Cloud Run URL for this service)
-
-### GCP deploy
-
-Use `scripts/deploy_gcp.sh` to build and deploy to Cloud Run.
+3. Validate Python modules compile:
 
 ```bash
-export GCP_PROJECT=your-project
-export GCP_REGION=us-central1
-export SERVICE_NAME=genie-api
-export API_AUTH_TOKEN=replace-me
-./scripts/deploy_gcp.sh
+python -m py_compile $(rg --files -g '*.py')
+```
+
+4. Run the MVP entrypoint:
+
+```bash
+python main.py
+```
+
+## Expected runtime behavior
+
+- If Lean is installed and reachable, Genie attempts to prove a simple theorem with beam search.
+- If Lean is not installed, runtime currently fails when invoking `lean` (known gap addressed in future sprint tasks).
+
+## Running tests
+
+```bash
+pytest
+```
+
+## Repository layout
+
+- `lean_env/` — Lean execution and output parsing
+- `policy_model/` — prompt and tactic generation interfaces
+- `search/` — beam search and scoring logic
+- `memory/` — in-memory retrieval scaffolding (pgvector adapter planned)
+- `training/` — dataset/reward utilities
+- `evaluation/` — benchmark metrics/helpers
+- `docs/` — planning and architecture docs
+
+## Development workflow
+
+- Add or update tests for any code changes.
+- Keep functions deterministic where possible.
+- Prefer small PRs with clear scope.
+- Run local checks before commit:
+
+```bash
+python -m py_compile $(rg --files -g '*.py')
+pytest
 ```
