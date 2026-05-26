@@ -5,7 +5,6 @@ from memory.pgvector_store import InMemoryVectorStore
 from memory.retrieval import RetrievalEngine
 from policy_model.tactic_generator import TacticGenerator
 from search.beam_search import BeamSearchProver, SearchConfig
-from utils.run_logger import JsonlRunLogger
 
 
 def main() -> None:
@@ -16,7 +15,6 @@ def main() -> None:
     generator = TacticGenerator()
     store = InMemoryVectorStore()
     retrieval = RetrievalEngine(store)
-    logger = JsonlRunLogger(theorem=theorem)
 
     prover = BeamSearchProver(
         executor=executor,
@@ -24,24 +22,11 @@ def main() -> None:
         config=SearchConfig(beam_width=3, max_depth=8, candidates_per_node=4),
     )
 
-    result = prover.prove(theorem=theorem, initial_goal=initial_goal, retrieve_fn=retrieval.retrieve, logger=logger)
-    if result.proof:
-        print("Solved theorem with tactics:", result.proof.history)
+    solved_node = prover.prove(theorem=theorem, initial_goal=initial_goal, retrieve_fn=retrieval.retrieve)
+    if solved_node:
+        print("Solved theorem with tactics:", solved_node.history)
     else:
         print("Failed to solve theorem within search limits.")
-
-    logger.log_final(
-        outcome=result.status,
-        extra={
-            "nodes_expanded": result.nodes_expanded,
-            "branches_pruned": result.branches_pruned,
-            "timeouts": result.timeouts,
-            "invalid_count": result.invalid_count,
-            "best_partial": result.best_partial,
-            "log_path": logger.path,
-        },
-    )
-    print(f"Run log written to {logger.path}")
 
 
 if __name__ == "__main__":
