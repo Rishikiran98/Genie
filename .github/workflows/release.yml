@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  quality-artifacts:
+    name: Build release quality artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run unit tests with coverage report
+        run: |
+          mkdir -p artifacts
+          pytest \
+            tests/test_parser.py \
+            tests/test_scorer.py \
+            tests/test_tactic_generator.py \
+            --junitxml=artifacts/unit-junit.xml \
+            --cov=. \
+            --cov-report=xml:artifacts/coverage.xml \
+            --cov-report=term
+
+      - name: Run integration tests
+        run: |
+          pytest tests/test_beam_search.py --junitxml=artifacts/integration-junit.xml
+
+      - name: Run benchmark suite
+        run: |
+          python evaluation/benchmark_runner.py \
+            --dataset datasets/benchmarks/curated_theorems.json \
+            --output artifacts/benchmark-release.json
+
+      - name: Generate quality summary
+        run: |
+          python - <<'PY'
+          import json
+          import xml.etree.ElementTree as ET
+          import os
+          from pathlib import Path
+
+          artifacts = Path("artifacts")
+          unit = ET.parse(artifacts / "unit-junit.xml").getroot()
+          integration = ET.parse(artifacts / "integration-junit.xml").getroot()
+
+          def summarize_tests(root):
+              tests = int(root.attrib.get("tests", 0))
+              failures = int(root.attrib.get("failures", 0))
+              errors = int(root.attrib.get("errors", 0))
+              skipped = int(root.attrib.get("skipped", 0))
+              return tests, failures, errors, skipped
+
+          u_tests, u_fail, u_err, u_skip = summarize_tests(unit)
+          i_tests, i_fail, i_err, i_skip = summarize_tests(integration)
+
+          bench = json.loads((artifacts / "benchmark-release.json").read_text())
+          theorem_count = len(bench.get("results", []))
+
+          summary = Path("artifacts/quality-summary.md")
+          summary.write_text(
+              "# Release Quality Summary\n\n"
+              f"Tag: {os.getenv('GITHUB_REF_NAME', 'unknown-tag')}\n\n"
+              "## Unit Tests\n"
+              f"- tests: {u_tests}\n"
+              f"- failures: {u_fail}\n"
+              f"- errors: {u_err}\n"
+              f"- skipped: {u_skip}\n\n"
+              "## Integration Tests\n"
+              f"- tests: {i_tests}\n"
+              f"- failures: {i_fail}\n"
+              f"- errors: {i_err}\n"
+              f"- skipped: {i_skip}\n\n"
+              "## Benchmark\n"
+              f"- theorem_results: {theorem_count}\n"
+              "- details: benchmark-release.json\n"
+          )
+          PY
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-quality-artifacts
+          path: |
+            artifacts/coverage.xml
+            artifacts/unit-junit.xml
+            artifacts/integration-junit.xml
+            artifacts/benchmark-release.json
+            artifacts/quality-summary.md
+          if-no-files-found: error
+
+      - name: Publish GitHub release with artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/coverage.xml
+            artifacts/unit-junit.xml
+            artifacts/integration-junit.xml
+            artifacts/benchmark-release.json
+            artifacts/quality-summary.md

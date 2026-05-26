@@ -1,0 +1,2 @@
+/home/user/project/Main.lean:1:0: error: unknown module prefix 'Mathlib'
+warning: failed to find source for imported module
