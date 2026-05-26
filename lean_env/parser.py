@@ -6,12 +6,18 @@ from dataclasses import dataclass
 
 @dataclass
 class ParsedProofState:
-    goal: str
+    primary_goal: str | None
+    goals: list[str]
     hypotheses: list[str]
     local_context: list[str]
     errors: list[str]
+    warnings: list[str]
     depth: int
     raw_output: str
+
+    @property
+    def goal(self) -> str:
+        return self.primary_goal or ""
 
 
 class ProofStateParser:
@@ -20,25 +26,38 @@ class ProofStateParser:
     GOAL_PATTERN = re.compile(r"⊢\s*(.+)")
 
     def parse(self, output: str, depth: int = 0) -> ParsedProofState:
-        goals = self.GOAL_PATTERN.findall(output)
-        goal = goals[-1].strip() if goals else ""
+        goals = [g.strip() for g in self.GOAL_PATTERN.findall(output) if g.strip()]
+        primary_goal = goals[-1] if goals else None
 
-        errors = [line.strip() for line in output.splitlines() if "error:" in line.lower()]
+        lines = output.splitlines()
+        errors = [line.strip() for line in lines if "error:" in line.lower()]
+        warnings = [line.strip() for line in lines if "warning:" in line.lower()]
 
         hypotheses: list[str] = []
         local_context: list[str] = []
-        for line in output.splitlines():
+        for line in lines:
             s = line.strip()
+            if not s:
+                continue
             if s.startswith("case "):
                 local_context.append(s)
-            elif ":" in s and not s.startswith("⊢") and "error:" not in s.lower():
+                hypotheses = []  # keep only local hypotheses for active case block
+                continue
+            if s.startswith("⊢"):
+                continue
+            low = s.lower()
+            if "error:" in low or "warning:" in low or low.startswith("info:"):
+                continue
+            if ":" in s and not s.startswith("/"):
                 hypotheses.append(s)
 
         return ParsedProofState(
-            goal=goal,
+            primary_goal=primary_goal,
+            goals=goals,
             hypotheses=hypotheses,
             local_context=local_context,
             errors=errors,
+            warnings=warnings,
             depth=depth,
             raw_output=output,
         )
