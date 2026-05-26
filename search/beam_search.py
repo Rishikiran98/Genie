@@ -49,8 +49,9 @@ class BeamSearchProver:
                     result = self.executor.run_tactic(theorem, node.history, tactic, depth + 1)
                     if result.next_state is None:
                         continue
+                    next_goal = getattr(result.next_state, "primary_goal", None) or getattr(result.next_state, "goal", "")
                     next_node = StateNode(
-                        goal=result.next_state.goal,
+                        goal=next_goal,
                         hypotheses=result.next_state.hypotheses,
                         history=node.history + [tactic],
                         depth=depth + 1,
