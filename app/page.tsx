@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { SimulationDashboard } from "@/components/SimulationDashboard";
+import { ScenarioPanel } from "@/components/ScenarioPanel";
+import { ActionPlanPanel } from "@/components/ActionPlanPanel";
 import type { SimulationResult } from "@/lib/simulation/schema";
 
 const EXAMPLES = [
@@ -18,27 +20,31 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SimulationResult | null>(null);
+  const [submitted, setSubmitted] = useState<{ idea: string; audience?: string; timeline?: string } | null>(null);
 
   async function simulate(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
+      const payload = {
+        idea,
+        audience: audience || undefined,
+        timeline: timeline || undefined,
+      };
       const res = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idea,
-          audience: audience || undefined,
-          timeline: timeline || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Something went wrong.");
         setResult(null);
+        setSubmitted(null);
       } else {
         setResult(data as SimulationResult);
+        setSubmitted(payload);
       }
     } catch {
       setError("Could not reach Genie. Check your connection and try again.");
@@ -115,6 +121,18 @@ export default function Home() {
       {result && (
         <div className="mt-10">
           <SimulationDashboard result={result} />
+        </div>
+      )}
+
+      {result && submitted && (
+        <div className="mt-12 border-t border-white/10 pt-10">
+          <ScenarioPanel key={submitted.idea} input={submitted} baseScores={result.report.scores} />
+        </div>
+      )}
+
+      {result && submitted && (
+        <div className="mt-12 border-t border-white/10 pt-10">
+          <ActionPlanPanel key={submitted.idea} input={submitted} />
         </div>
       )}
     </main>

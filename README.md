@@ -7,8 +7,13 @@ plan, or decision in plain language, and Genie turns it into a clear, scored,
 practical report — summary, target user, market read, risks, an MVP suggestion,
 and concrete next steps — instead of a wall of generic chatbot text.
 
-This repository currently implements the **simulation engine slice**: the
-end-to-end path from *idea input → structured, scored simulation report*.
+This repository currently implements:
+
+- the **simulation engine** — *idea input → structured, scored report*, and
+- **scenario testing** — replay the idea through best / worst / realistic /
+  cheap-MVP / fastest / long-term lenses and see how the scores shift, and
+- the **action plan generator** — a day-by-day first week, a 30-day roadmap,
+  and build + validation checklists.
 
 ## How it works
 
@@ -70,16 +75,22 @@ The report's badge shows whether it came from the **LLM engine** or the
 
 ```
 app/
-  page.tsx                 # Home: idea input + dashboard
-  api/simulate/route.ts    # POST endpoint: validate → simulate → JSON
-components/                # Dashboard + score-card UI
+  page.tsx                 # Home: idea input + dashboard + scenarios + plan
+  api/simulate/route.ts    # POST: validate → simulate → JSON
+  api/scenario/route.ts    # POST: validate → run one scenario → JSON
+  api/actionplan/route.ts  # POST: validate → generate action plan → JSON
+components/                # Dashboard, score cards, scenario + action-plan panels
 lib/simulation/
   schema.ts                # Zod schema + types (the report contract)
   prompt.ts                # System / user prompt templates
   heuristic.ts             # Deterministic offline engine
-  provider.ts              # OpenAI-compatible LLM adapter
-  engine.ts                # Dispatch + fallback logic
-  engine.test.ts           # Unit tests
+  provider.ts              # OpenAI-compatible LLM adapter (shared chatJson)
+  engine.ts                # Simulation dispatch + fallback logic
+  scenario.ts              # Scenario lenses, engine + dispatch
+  actionplan.ts            # Action plan engine + dispatch
+  engine.test.ts           # Simulation unit tests
+  scenario.test.ts         # Scenario unit tests
+  actionplan.test.ts       # Action plan unit tests
 ```
 
 ## Tech stack
@@ -88,9 +99,9 @@ Next.js (App Router) · TypeScript · Tailwind CSS · Zod · Vitest.
 
 ## Roadmap
 
-This slice is step one of the broader MVP. Next up:
+Done so far: the simulation engine, scenario testing, and the action plan
+generator. Next up:
 
-- **Scenario testing** — best / worst / realistic / cheap-MVP / fast paths.
-- **Action plan generator** — Day 1–7 and 30-day roadmaps.
+- **Clarifying questions** — sharpen vague ideas before simulating.
 - **Saved simulations** — persistence (PostgreSQL + pgvector memory).
 - **Auth & accounts** — so users can revisit and compare past ideas.
