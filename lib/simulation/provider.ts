@@ -37,15 +37,17 @@ export function extractJson(content: string): unknown {
 }
 
 /**
- * Calls an OpenAI-compatible Chat Completions endpoint and validates the result
- * against the report schema. Throws on any network, parsing, or validation
- * failure so the caller can decide whether to fall back.
+ * Calls an OpenAI-compatible Chat Completions endpoint with a system + user
+ * message pair, expects a JSON object back, and returns it parsed (but not yet
+ * schema-validated). Throws on any network or parsing failure so callers can
+ * decide whether to fall back. Shared by every LLM-backed feature.
  */
-export async function llmSimulation(
-  input: SimulationInput,
+export async function chatJson(
   config: LlmConfig,
+  system: string,
+  user: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<SimulationReport> {
+): Promise<unknown> {
   const res = await fetchImpl(`${config.baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -57,8 +59,8 @@ export async function llmSimulation(
       temperature: 0.4,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserPrompt(input) },
+        { role: "system", content: system },
+        { role: "user", content: user },
       ],
     }),
   });
@@ -72,5 +74,18 @@ export async function llmSimulation(
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error("LLM response had no content.");
 
-  return simulationReportSchema.parse(extractJson(content));
+  return extractJson(content);
+}
+
+/**
+ * Runs a full simulation through the LLM and validates the result against the
+ * report schema.
+ */
+export async function llmSimulation(
+  input: SimulationInput,
+  config: LlmConfig,
+  fetchImpl: typeof fetch = fetch,
+): Promise<SimulationReport> {
+  const raw = await chatJson(config, SYSTEM_PROMPT, buildUserPrompt(input), fetchImpl);
+  return simulationReportSchema.parse(raw);
 }

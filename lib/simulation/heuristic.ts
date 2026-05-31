@@ -146,7 +146,7 @@ function scoreRisk(s: Signals): number {
   return clamp(score);
 }
 
-function shortTopic(idea: string): string {
+export function shortTopic(idea: string): string {
   const trimmed = idea.trim().replace(/\s+/g, " ");
   const words = trimmed.split(" ");
   if (words.length <= 14) return trimmed.replace(/[.?!]+$/, "");
