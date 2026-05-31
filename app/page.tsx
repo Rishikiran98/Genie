@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SimulationDashboard } from "@/components/SimulationDashboard";
 import { ScenarioPanel } from "@/components/ScenarioPanel";
 import { ActionPlanPanel } from "@/components/ActionPlanPanel";
 import { SavedSimulations } from "@/components/SavedSimulations";
+import { AuthBar } from "@/components/AuthBar";
+import { useAuth } from "@/components/AuthProvider";
 import { deriveTitle, getStore, type SavedSimulation } from "@/lib/storage";
 import type { SimulationResult } from "@/lib/simulation/schema";
 
@@ -25,6 +27,13 @@ export default function Home() {
   const [submitted, setSubmitted] = useState<{ idea: string; audience?: string; timeline?: string } | null>(null);
   const [savedRefresh, setSavedRefresh] = useState(0);
   const [savedThis, setSavedThis] = useState(false);
+  const { user } = useAuth();
+
+  // Re-read saved simulations when the signed-in user changes (the active
+  // storage backend switches between Supabase and local storage).
+  useEffect(() => {
+    setSavedRefresh((n) => n + 1);
+  }, [user]);
 
   async function simulate(e: React.FormEvent) {
     e.preventDefault();
@@ -84,6 +93,8 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
+      <AuthBar />
+
       <header className="text-center">
         <h1 className="text-4xl font-bold tracking-tight text-slate-50">Genie</h1>
         <p className="mt-3 text-balance text-slate-300">

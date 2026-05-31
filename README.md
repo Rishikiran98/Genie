@@ -15,8 +15,9 @@ This repository currently implements:
 - the **action plan generator** — a day-by-day first week, a 30-day roadmap,
   and build + validation checklists, and
 - **saved simulations** — keep simulations and reopen them later, with
-  at-a-glance scores for comparison (browser storage by default, optional
-  Supabase backend).
+  at-a-glance scores for comparison, and
+- **accounts** — optional OAuth sign-in (Supabase Auth); signed-in users get
+  their saves synced server-side and scoped to them via Row Level Security.
 
 ## How it works
 
@@ -82,7 +83,7 @@ app/
   api/simulate/route.ts    # POST: validate → simulate → JSON
   api/scenario/route.ts    # POST: validate → run one scenario → JSON
   api/actionplan/route.ts  # POST: validate → generate action plan → JSON
-components/                # Dashboard, score cards, scenario/action-plan/saved panels
+components/                # Dashboard, score cards, panels, auth UI
 lib/simulation/
   schema.ts                # Zod schema + types (the report contract)
   prompt.ts                # System / user prompt templates
@@ -94,27 +95,40 @@ lib/simulation/
   *.test.ts                # Unit tests per module
 lib/storage/
   types.ts                 # SimulationStore interface + SavedSimulation type
-  local.ts                 # Browser (localStorage) store — the default
-  supabase.ts              # Supabase store (opt-in; inactive until configured)
-  index.ts                 # getStore() factory (picks backend from env)
-supabase/migrations/       # SQL schema for the optional Supabase backend
+  local.ts                 # Browser (localStorage) store — default / signed-out
+  supabase.ts              # Supabase store (used when signed in)
+  index.ts                 # getStore() factory (follows auth state)
+lib/supabase/
+  client.ts                # Browser Supabase client + config detection
+supabase/migrations/       # Auth-aware SQL schema (RLS per user)
 ```
 
-## Persistence
+## Persistence & accounts
 
-Saved simulations use a small `SimulationStore` interface with two backends:
+Saved simulations use a small `SimulationStore` interface that follows the
+auth state:
 
-- **Browser (default)** — `localStorage`. Zero setup, survives reloads, scoped
-  to the device. This is what runs out of the box.
-- **Supabase (opt-in)** — set `NEXT_PUBLIC_SUPABASE_URL` and
-  `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and apply
-  `supabase/migrations/0001_init_simulations.sql` to your project. `getStore()`
-  then uses Supabase automatically (and falls back to browser storage if the
-  client can't initialize).
+- **Browser (default / signed-out)** — `localStorage`. Zero setup, survives
+  reloads, scoped to the device. This is what runs out of the box, and what
+  signed-out visitors get even when Supabase is configured.
+- **Supabase (signed-in)** — once `NEXT_PUBLIC_SUPABASE_URL` and
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set and a user signs in, saves go to
+  Postgres, scoped to that user via Row Level Security.
 
-> The migration is **not** applied for you — review it first. Until the auth
-> slice lands, rows aren't scoped per user, so only enable Supabase for a
-> private/single-user project.
+### Enabling accounts (Supabase)
+
+1. Apply `supabase/migrations/0001_init_simulations.sql` to your project
+   (creates the `simulations` table, `user_id`, and per-user RLS policies).
+2. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (these
+   are inlined at **build** time, so set them before building/deploying).
+3. In the Supabase dashboard → **Authentication → Providers**, enable **Google**
+   and/or **GitHub** and add their OAuth client id/secret.
+4. In **Authentication → URL Configuration**, set the Site URL and add your
+   app origins (e.g. `http://localhost:3000` and your production URL) to the
+   redirect allow-list.
+
+> NEXT_PUBLIC keys are public by design. Security comes from RLS, so the
+> migration's per-user policies are what keep one user's data private.
 
 ## Tech stack
 
@@ -123,9 +137,8 @@ Next.js (App Router) · TypeScript · Tailwind CSS · Zod · Vitest.
 ## Roadmap
 
 Done so far: the simulation engine, scenario testing, the action plan
-generator, and saved simulations. Next up:
+generator, saved simulations, and accounts (OAuth + per-user data). Next up:
 
-- **Auth & accounts** — scope saved data per user (Supabase Auth + RLS),
-  which unblocks the multi-user Supabase backend.
 - **Clarifying questions** — sharpen vague ideas before simulating.
 - **Semantic memory** — pgvector over past simulations.
+- **Saved scenarios** — persist generated scenarios (table already in place).

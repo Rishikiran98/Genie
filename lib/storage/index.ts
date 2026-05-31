@@ -1,23 +1,28 @@
+import { getBrowserClient, isSupabaseEnabled } from "../supabase/client";
 import { LocalSimulationStore } from "./local";
 import type { SimulationStore } from "./types";
 
 export * from "./types";
 
-let cached: Promise<SimulationStore> | null = null;
-
-async function create(): Promise<SimulationStore> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  // Use Supabase when configured; the import is dynamic so the client library
-  // never lands in the bundle for the default (local) setup.
-  if (url && key) {
+/**
+ * Picks the active store for the current session:
+ *   - Supabase, when it's configured AND the user is signed in (rows are
+ *     scoped to the user via RLS).
+ *   - Browser localStorage otherwise — including signed-out users, so saving
+ *     still works before you log in.
+ *
+ * Not memoized: it re-evaluates each call so the backend follows the auth
+ * state (the UI reloads the saved list when the user signs in or out).
+ */
+export async function getStore(): Promise<SimulationStore> {
+  if (isSupabaseEnabled()) {
     try {
-      const [{ createClient }, { SupabaseSimulationStore }] = await Promise.all([
-        import("@supabase/supabase-js"),
-        import("./supabase"),
-      ]);
-      return new SupabaseSimulationStore(createClient(url, key));
+      const client = await getBrowserClient();
+      const { data } = await client.auth.getSession();
+      if (data.session) {
+        const { SupabaseSimulationStore } = await import("./supabase");
+        return new SupabaseSimulationStore(client);
+      }
     } catch (err) {
       console.warn("Genie Supabase store unavailable; falling back to local storage:", err);
     }
@@ -28,10 +33,4 @@ async function create(): Promise<SimulationStore> {
   }
 
   throw new Error("No storage backend is available in this environment.");
-}
-
-/** Returns the active store for this session (memoized). */
-export function getStore(): Promise<SimulationStore> {
-  if (!cached) cached = create();
-  return cached;
 }
