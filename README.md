@@ -13,7 +13,10 @@ This repository currently implements:
 - **scenario testing** — replay the idea through best / worst / realistic /
   cheap-MVP / fastest / long-term lenses and see how the scores shift, and
 - the **action plan generator** — a day-by-day first week, a 30-day roadmap,
-  and build + validation checklists.
+  and build + validation checklists, and
+- **saved simulations** — keep simulations and reopen them later, with
+  at-a-glance scores for comparison (browser storage by default, optional
+  Supabase backend).
 
 ## How it works
 
@@ -79,7 +82,7 @@ app/
   api/simulate/route.ts    # POST: validate → simulate → JSON
   api/scenario/route.ts    # POST: validate → run one scenario → JSON
   api/actionplan/route.ts  # POST: validate → generate action plan → JSON
-components/                # Dashboard, score cards, scenario + action-plan panels
+components/                # Dashboard, score cards, scenario/action-plan/saved panels
 lib/simulation/
   schema.ts                # Zod schema + types (the report contract)
   prompt.ts                # System / user prompt templates
@@ -88,10 +91,30 @@ lib/simulation/
   engine.ts                # Simulation dispatch + fallback logic
   scenario.ts              # Scenario lenses, engine + dispatch
   actionplan.ts            # Action plan engine + dispatch
-  engine.test.ts           # Simulation unit tests
-  scenario.test.ts         # Scenario unit tests
-  actionplan.test.ts       # Action plan unit tests
+  *.test.ts                # Unit tests per module
+lib/storage/
+  types.ts                 # SimulationStore interface + SavedSimulation type
+  local.ts                 # Browser (localStorage) store — the default
+  supabase.ts              # Supabase store (opt-in; inactive until configured)
+  index.ts                 # getStore() factory (picks backend from env)
+supabase/migrations/       # SQL schema for the optional Supabase backend
 ```
+
+## Persistence
+
+Saved simulations use a small `SimulationStore` interface with two backends:
+
+- **Browser (default)** — `localStorage`. Zero setup, survives reloads, scoped
+  to the device. This is what runs out of the box.
+- **Supabase (opt-in)** — set `NEXT_PUBLIC_SUPABASE_URL` and
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and apply
+  `supabase/migrations/0001_init_simulations.sql` to your project. `getStore()`
+  then uses Supabase automatically (and falls back to browser storage if the
+  client can't initialize).
+
+> The migration is **not** applied for you — review it first. Until the auth
+> slice lands, rows aren't scoped per user, so only enable Supabase for a
+> private/single-user project.
 
 ## Tech stack
 
@@ -99,9 +122,10 @@ Next.js (App Router) · TypeScript · Tailwind CSS · Zod · Vitest.
 
 ## Roadmap
 
-Done so far: the simulation engine, scenario testing, and the action plan
-generator. Next up:
+Done so far: the simulation engine, scenario testing, the action plan
+generator, and saved simulations. Next up:
 
+- **Auth & accounts** — scope saved data per user (Supabase Auth + RLS),
+  which unblocks the multi-user Supabase backend.
 - **Clarifying questions** — sharpen vague ideas before simulating.
-- **Saved simulations** — persistence (PostgreSQL + pgvector memory).
-- **Auth & accounts** — so users can revisit and compare past ideas.
+- **Semantic memory** — pgvector over past simulations.
