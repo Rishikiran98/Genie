@@ -1,3 +1,0 @@
-info: build completed successfully
-warning: declaration uses 'sorry'
-no goals

@@ -1,84 +1,96 @@
 # Genie
 
-Self-Learning Theorem Proving Agent.
+**Test ideas before you waste time building them.**
 
-## What this repository is
+Genie is an idea & decision **simulation engine**. You describe a goal, idea,
+plan, or decision in plain language, and Genie turns it into a clear, scored,
+practical report — summary, target user, market read, risks, an MVP suggestion,
+and concrete next steps — instead of a wall of generic chatbot text.
 
-Genie is an early-stage theorem-proving agent scaffold that combines:
-- Lean verification
-- proof-state parsing
-- tactic proposal
-- beam search
-- retrieval/memory
-- training/evaluation utilities
+This repository currently implements the **simulation engine slice**: the
+end-to-end path from *idea input → structured, scored simulation report*.
 
-## Current status
+## How it works
 
-This project is currently in scaffold/MVP stage. The core modules are present, but robust Lean runtime integration and production workflows are still in progress.
+```
+idea (+ optional audience / timeline)
+        │
+        ▼
+  /api/simulate  ──►  runSimulation()
+                          │
+            ┌─────────────┴──────────────┐
+        LLM engine                  Offline engine
+   (if GENIE_LLM_API_KEY set)   (deterministic heuristic,
+    OpenAI-compatible API)       always available)
+                          │
+                          ▼
+              schema-validated SimulationReport
+                          │
+                          ▼
+                  Dashboard with scores
+```
 
-## Prerequisites
-
-- Python 3.11+ (3.12 tested in this environment)
-- Lean 4 toolchain available on `PATH` as `lean`
-- (Optional, later phases) Mathlib project tooling and model/provider credentials
+Genie **runs with zero configuration**: when no LLM key is present (or the LLM
+call fails), it falls back to a deterministic, offline heuristic engine so you
+always get a complete, schema-valid report. Configure an LLM for richer output.
 
 ## Quickstart
 
-1. Clone and enter the repo:
-
 ```bash
-git clone <your-fork-or-repo-url>
-cd Genie
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-2. (Recommended) Create a virtual environment:
+Open the app, type an idea (or click an example), and hit **Simulate**.
+
+### Optional: use a real LLM
+
+Copy `.env.example` to `.env.local` and set an OpenAI-compatible endpoint:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+GENIE_LLM_API_KEY=sk-...
+GENIE_LLM_BASE_URL=https://api.openai.com/v1
+GENIE_LLM_MODEL=gpt-4o-mini
 ```
 
-3. Validate Python modules compile:
+The report's badge shows whether it came from the **LLM engine** or the
+**Offline engine**.
 
-```bash
-python -m py_compile $(rg --files -g '*.py')
+## Scripts
+
+| Command            | What it does                          |
+| ------------------ | ------------------------------------- |
+| `npm run dev`      | Start the dev server                  |
+| `npm run build`    | Production build                      |
+| `npm run test`     | Run the engine unit tests (Vitest)    |
+| `npm run typecheck`| Type-check with `tsc`                 |
+| `npm run lint`     | Next.js / ESLint                      |
+
+## Project layout
+
+```
+app/
+  page.tsx                 # Home: idea input + dashboard
+  api/simulate/route.ts    # POST endpoint: validate → simulate → JSON
+components/                # Dashboard + score-card UI
+lib/simulation/
+  schema.ts                # Zod schema + types (the report contract)
+  prompt.ts                # System / user prompt templates
+  heuristic.ts             # Deterministic offline engine
+  provider.ts              # OpenAI-compatible LLM adapter
+  engine.ts                # Dispatch + fallback logic
+  engine.test.ts           # Unit tests
 ```
 
-4. Run the MVP entrypoint:
+## Tech stack
 
-```bash
-python main.py
-```
+Next.js (App Router) · TypeScript · Tailwind CSS · Zod · Vitest.
 
-## Expected runtime behavior
+## Roadmap
 
-- If Lean is installed and reachable, Genie attempts to prove a simple theorem with beam search.
-- If Lean is not installed, runtime currently fails when invoking `lean` (known gap addressed in future sprint tasks).
+This slice is step one of the broader MVP. Next up:
 
-## Running tests
-
-```bash
-pytest
-```
-
-## Repository layout
-
-- `lean_env/` — Lean execution and output parsing
-- `policy_model/` — prompt and tactic generation interfaces
-- `search/` — beam search and scoring logic
-- `memory/` — in-memory retrieval scaffolding (pgvector adapter planned)
-- `training/` — dataset/reward utilities
-- `evaluation/` — benchmark metrics/helpers
-- `docs/` — planning and architecture docs
-
-## Development workflow
-
-- Add or update tests for any code changes.
-- Keep functions deterministic where possible.
-- Prefer small PRs with clear scope.
-- Run local checks before commit:
-
-```bash
-python -m py_compile $(rg --files -g '*.py')
-pytest
-```
+- **Scenario testing** — best / worst / realistic / cheap-MVP / fast paths.
+- **Action plan generator** — Day 1–7 and 30-day roadmaps.
+- **Saved simulations** — persistence (PostgreSQL + pgvector memory).
+- **Auth & accounts** — so users can revisit and compare past ideas.

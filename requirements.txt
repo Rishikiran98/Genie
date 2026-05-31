@@ -1,3 +1,0 @@
-# Add your LLM and DB clients as you integrate them.
-# openai
-# psycopg[binary]

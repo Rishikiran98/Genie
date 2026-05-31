@@ -1,4 +1,0 @@
-α : Type
-x y : α
-h : x = y
-⊢ y = x
