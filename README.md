@@ -11,7 +11,9 @@ This repository currently implements:
 
 - the **simulation engine** — *idea input → structured, scored report*, and
 - **scenario testing** — replay the idea through best / worst / realistic /
-  cheap-MVP / fastest / long-term lenses and see how the scores shift.
+  cheap-MVP / fastest / long-term lenses and see how the scores shift, and
+- the **action plan generator** — a day-by-day first week, a 30-day roadmap,
+  and build + validation checklists.
 
 ## How it works
 
@@ -73,10 +75,11 @@ The report's badge shows whether it came from the **LLM engine** or the
 
 ```
 app/
-  page.tsx                 # Home: idea input + dashboard + scenarios
+  page.tsx                 # Home: idea input + dashboard + scenarios + plan
   api/simulate/route.ts    # POST: validate → simulate → JSON
   api/scenario/route.ts    # POST: validate → run one scenario → JSON
-components/                # Dashboard, score cards, scenario panel
+  api/actionplan/route.ts  # POST: validate → generate action plan → JSON
+components/                # Dashboard, score cards, scenario + action-plan panels
 lib/simulation/
   schema.ts                # Zod schema + types (the report contract)
   prompt.ts                # System / user prompt templates
@@ -84,8 +87,10 @@ lib/simulation/
   provider.ts              # OpenAI-compatible LLM adapter (shared chatJson)
   engine.ts                # Simulation dispatch + fallback logic
   scenario.ts              # Scenario lenses, engine + dispatch
+  actionplan.ts            # Action plan engine + dispatch
   engine.test.ts           # Simulation unit tests
   scenario.test.ts         # Scenario unit tests
+  actionplan.test.ts       # Action plan unit tests
 ```
 
 ## Tech stack
@@ -94,9 +99,9 @@ Next.js (App Router) · TypeScript · Tailwind CSS · Zod · Vitest.
 
 ## Roadmap
 
-Done so far: the simulation engine and scenario testing. Next up:
+Done so far: the simulation engine, scenario testing, and the action plan
+generator. Next up:
 
-- **Action plan generator** — Day 1–7 and 30-day roadmaps.
 - **Clarifying questions** — sharpen vague ideas before simulating.
 - **Saved simulations** — persistence (PostgreSQL + pgvector memory).
 - **Auth & accounts** — so users can revisit and compare past ideas.

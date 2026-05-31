@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SimulationDashboard } from "@/components/SimulationDashboard";
 import { ScenarioPanel } from "@/components/ScenarioPanel";
+import { ActionPlanPanel } from "@/components/ActionPlanPanel";
 import type { SimulationResult } from "@/lib/simulation/schema";
 
 const EXAMPLES = [
@@ -126,6 +127,12 @@ export default function Home() {
       {result && submitted && (
         <div className="mt-12 border-t border-white/10 pt-10">
           <ScenarioPanel key={submitted.idea} input={submitted} baseScores={result.report.scores} />
+        </div>
+      )}
+
+      {result && submitted && (
+        <div className="mt-12 border-t border-white/10 pt-10">
+          <ActionPlanPanel key={submitted.idea} input={submitted} />
         </div>
       )}
     </main>
