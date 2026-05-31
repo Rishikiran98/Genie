@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
     "next": "^15.5.18",
     "react": "19.0.0",
     "react-dom": "19.0.0",

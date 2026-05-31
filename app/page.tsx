@@ -4,6 +4,8 @@ import { useState } from "react";
 import { SimulationDashboard } from "@/components/SimulationDashboard";
 import { ScenarioPanel } from "@/components/ScenarioPanel";
 import { ActionPlanPanel } from "@/components/ActionPlanPanel";
+import { SavedSimulations } from "@/components/SavedSimulations";
+import { deriveTitle, getStore, type SavedSimulation } from "@/lib/storage";
 import type { SimulationResult } from "@/lib/simulation/schema";
 
 const EXAMPLES = [
@@ -21,6 +23,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [submitted, setSubmitted] = useState<{ idea: string; audience?: string; timeline?: string } | null>(null);
+  const [savedRefresh, setSavedRefresh] = useState(0);
+  const [savedThis, setSavedThis] = useState(false);
 
   async function simulate(e: React.FormEvent) {
     e.preventDefault();
@@ -45,12 +49,37 @@ export default function Home() {
       } else {
         setResult(data as SimulationResult);
         setSubmitted(payload);
+        setSavedThis(false);
       }
     } catch {
       setError("Could not reach Genie. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function saveCurrent() {
+    if (!result || !submitted) return;
+    const store = await getStore();
+    await store.save({
+      title: deriveTitle(submitted.idea),
+      input: submitted,
+      report: result.report,
+      engine: result.engine,
+    });
+    setSavedThis(true);
+    setSavedRefresh((n) => n + 1);
+  }
+
+  function openSaved(saved: SavedSimulation) {
+    setIdea(saved.input.idea);
+    setAudience(saved.input.audience ?? "");
+    setTimeline(saved.input.timeline ?? "");
+    setSubmitted(saved.input);
+    setResult({ report: saved.report, engine: saved.engine });
+    setSavedThis(true);
+    setError(null);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
@@ -120,6 +149,16 @@ export default function Home() {
 
       {result && (
         <div className="mt-10">
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              onClick={saveCurrent}
+              disabled={savedThis}
+              className="rounded-xl bg-white/5 px-4 py-2 text-sm font-medium text-slate-200 ring-1 ring-white/10 transition hover:bg-white/10 disabled:opacity-50"
+            >
+              {savedThis ? "Saved ✓" : "Save simulation"}
+            </button>
+          </div>
           <SimulationDashboard result={result} />
         </div>
       )}
@@ -135,6 +174,8 @@ export default function Home() {
           <ActionPlanPanel key={submitted.idea} input={submitted} />
         </div>
       )}
+
+      <SavedSimulations refreshKey={savedRefresh} onOpen={openSaved} />
     </main>
   );
 }
