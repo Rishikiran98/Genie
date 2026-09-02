@@ -55,83 +55,82 @@ export interface ActionPlanResult {
 
 export function heuristicActionPlan(input: SimulationInput, base: SimulationReport): ActionPlan {
   const topic = shortTopic(input.idea);
-  const hasAudience = Boolean(input.audience?.trim());
+  const user = input.targetUser || input.audience;
+  const hasAudience = Boolean(user?.trim());
   const hasTimeline = Boolean(input.timeline?.trim());
-  const lowClarity = base.scores.clarity < 50;
-  const lowPracticality = base.scores.practicality < 50;
+  const lowConfidence = base.scores.confidence < 60;
+  const lowFeasibility = base.scores.feasibility < 55;
 
   const dailyPlan: ActionPlan["dailyPlan"] = [
     {
       day: 1,
-      focus: "Sharpen the problem and pick your first user",
+      focus: "Sharpen the problem and identify weak assumptions",
       tasks: [
-        lowClarity
+        lowConfidence
           ? "Write the problem you're solving in one concrete sentence — the painful, recurring situation."
-          : "Restate the core problem in one sentence and confirm people actively try to solve it today.",
+          : `Identify the weak assumption: "${base.weakAssumption}".`,
         hasAudience
-          ? `Profile one specific first user within "${input.audience!.trim()}" that you can actually reach.`
-          : "Pick ONE narrow first user you can reach this week — avoid 'everyone'.",
-        "List the alternatives they use today, including doing nothing.",
+          ? `Profile one specific target user within "${user!.trim()}".`
+          : "Pick ONE narrow target user persona you can reach this week.",
+        "List the alternatives they currently use to solve this problem.",
       ],
     },
     {
       day: 2,
-      focus: "Talk to real people before building",
+      focus: "Design and launch the validation experiment",
       tasks: [
-        "Line up 5–10 short conversations with potential users.",
-        "Ask about their current workaround and what it costs them — don't pitch.",
-        "Capture verbatim quotes; look for repeated pain, not polite interest.",
+        `Experiment design: ${base.experimentDesign}`,
+        "Create a simple landing page or survey describing the core value proposition.",
+        "Define your success metrics (e.g. 10 signups or 5 completed user interviews).",
       ],
     },
     {
       day: 3,
-      focus: "Scope the thinnest MVP",
+      focus: "Conduct user interviews and gather real-world data",
       tasks: [
-        `Define the single core action the MVP must nail. Genie's suggestion: ${base.mvpSuggestion}`,
-        "Write down what you will NOT build for v1.",
-        lowPracticality
-          ? "Identify the hardest technical unknown and plan to spike it first."
-          : "Choose the simplest tools/stack that can ship this in days.",
+        "Reach out directly to 10 potential target users.",
+        "Ask about their current workflow, friction points, and willingness to pay.",
+        "Record qualitative responses to test your core hypothesis.",
       ],
     },
     {
       day: 4,
-      focus: "Build a fake door to test demand",
+      focus: "Scope the minimal viable build (MVP)",
       tasks: [
-        "Put up a one-page landing site describing the value with a clear call to action.",
-        "Add a waitlist or 'notify me' capture.",
-        "Define your success threshold (e.g. X signups or Y% conversion).",
+        `Define the smallest testable build slice: ${base.mvpSuggestion}`,
+        "Explicitly list non-essential features that will NOT be built for v1.",
+        lowFeasibility
+          ? "Identify technical risks and run a rapid spike on the hardest component."
+          : "Choose lightweight tools that allow shipping within days.",
       ],
     },
     {
       day: 5,
-      focus: "Drive a first trickle of real traffic",
+      focus: "Build the single core workflow",
       tasks: [
-        "Share the landing page in 2–3 places your target users already gather.",
-        "Personally message 10 potential users with a short, specific note.",
-        "Track signups against your threshold.",
+        "Implement only the core value action — bypass auth, settings, and fluff.",
+        "Keep backend integrations manual (concierge style) where possible.",
+        "Ensure the user flow works smoothly end-to-end.",
       ],
     },
     {
       day: 6,
-      focus: "Prototype the core action — rough is fine",
+      focus: "Put the prototype in front of interviewees",
       tasks: [
-        "Implement only the one core action end-to-end; skip auth, settings, and polish.",
-        lowPracticality
-          ? "Spike the riskiest part first to prove it's feasible."
-          : "Keep it manual/concierge wherever automation isn't essential yet.",
-        "Get a single happy path working.",
+        "Get the initial prototype into the hands of 3–5 interviewed users.",
+        "Observe where users get confused or where value lands.",
+        "Collect immediate feedback on usability and perceived value.",
       ],
     },
     {
       day: 7,
-      focus: "Review the signal and decide",
+      focus: "Feed real data back into Genie and evaluate signal",
       tasks: [
-        "Compare results to your success threshold honestly.",
-        "Decide: double down, iterate the positioning, or kill it.",
+        "Review interview and experiment data against your initial targets.",
+        "Re-simulate the idea in Genie with your real-world evidence to update confidence.",
         hasTimeline
-          ? `Re-plan the next sprint against your stated timeline (${input.timeline!.trim()}).`
-          : "Set the next one-week milestone with a clear success metric.",
+          ? `Align the 30-day roadmap with your constraints (${input.timeline!.trim()}).`
+          : "Decide whether to proceed with building or pivot based on evidence.",
       ],
     },
   ];
@@ -139,47 +138,47 @@ export function heuristicActionPlan(input: SimulationInput, base: SimulationRepo
   const roadmap: ActionPlan["roadmap"] = [
     {
       window: "Week 1 (Days 1–7)",
-      goal: "Validate the problem and demand",
-      deliverable: "Evidence from 5+ user conversations and a live landing page with early signups.",
+      goal: "Validate core assumption and demand",
+      deliverable: "Real-world evidence from experiment & 5+ user interviews.",
     },
     {
       window: "Week 2",
-      goal: "Build the thinnest MVP slice",
-      deliverable: "The one core action working end-to-end for a single happy path.",
+      goal: "Build thinnest MVP slice",
+      deliverable: "Working end-to-end prototype of the core user action.",
     },
     {
       window: "Week 3",
-      goal: "Put the MVP in front of real users",
-      deliverable: "5–10 people have used it and structured feedback is collected.",
+      goal: "Deploy to initial pilot cohort",
+      deliverable: "10 active users testing the prototype and sharing feedback.",
     },
     {
       window: "Week 4",
-      goal: "Iterate and decide on investment",
-      deliverable: "A go / iterate / kill decision backed by usage data and a refined next plan.",
+      goal: "Evaluate metrics & make final Build / Pivot decision",
+      deliverable: "Data-backed decision roadmap for full product rollout.",
     },
   ];
 
   const buildChecklist = [
-    "Define the one core user action the MVP must deliver.",
-    "List what you're explicitly NOT building for v1.",
-    lowPracticality
-      ? "De-risk the hardest technical unknown with a quick spike."
-      : "Pick the simplest stack/tools that can ship in days.",
-    "Build the single happy path first — no auth, no settings, no polish.",
-    "Instrument basic usage tracking for the core action.",
+    "Define the single primary action the MVP delivers.",
+    "Explicitly document features deferred to post-MVP.",
+    lowFeasibility
+      ? "Spike the primary technical risk before writing UI code."
+      : "Use off-the-shelf tools to accelerate shipping.",
+    "Build a clean end-to-end path with minimal infrastructure.",
+    "Add basic analytics to measure core user activation.",
   ];
 
   const validationChecklist = [
-    "Talk to at least 5 target users about the problem, not the product.",
-    "Landing page + waitlist live with a clear call to action.",
-    "Define a success metric and the threshold that means 'keep going'.",
-    "Test willingness to pay with at least a rough pricing hypothesis.",
-    "Write down a kill criterion: what evidence, by when, would make you stop.",
+    `Test weak assumption: "${base.weakAssumption}".`,
+    "Run landing page or user interview experiment before building complex features.",
+    "Establish clear numerical thresholds for validating demand.",
+    "Test willingness to pay with direct pricing discussions or deposits.",
+    "Log evidence into Genie to re-simulate updated confidence.",
   ];
 
   const overview = hasTimeline
-    ? `A validation-first sprint for "${topic}", framed against your timeline (${input.timeline!.trim()}). Week one buys evidence, not code — confirm people want this before building it.`
-    : `A validation-first 4-week sprint for "${topic}". Week one buys evidence, not code — confirm people want this before building it.`;
+    ? `A validation-first sprint for "${topic}" framed against your timeline (${input.timeline!.trim()}). Week one collects real-world data before building.`
+    : `A validation-first 30-day roadmap for "${topic}". Week one collects real-world data before building.`;
 
   return { overview, dailyPlan, roadmap, buildChecklist, validationChecklist };
 }
@@ -207,13 +206,16 @@ Respond with ONLY a single JSON object (no markdown, no prose) matching exactly:
 }`;
 
 function buildActionPlanPrompt(input: SimulationInput, base: SimulationReport): string {
+  const user = input.targetUser || input.audience;
   return [
     `Idea: ${input.idea}`,
-    input.audience ? `Audience: ${input.audience}` : "",
+    user ? `Target User: ${user}` : "",
     input.timeline ? `Timeline: ${input.timeline}` : "",
     `\nBaseline analysis (for context):`,
     JSON.stringify({
       summary: base.summary,
+      weakAssumption: base.weakAssumption,
+      experimentDesign: base.experimentDesign,
       mvpSuggestion: base.mvpSuggestion,
       nextSteps: base.nextSteps,
       risks: base.risks,

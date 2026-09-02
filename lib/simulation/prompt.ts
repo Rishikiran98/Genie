@@ -2,11 +2,10 @@ import type { SimulationInput } from "./schema";
 
 /**
  * Genie's reasoning frame. The system prompt fixes the persona and the output
- * contract; the user prompt carries the idea and any volunteered context.
+ * contract; the user prompt carries the idea and any defined intent parameters.
  *
  * The output contract is deliberately strict JSON so the response can be
- * validated against `simulationReportSchema` and rendered as a dashboard
- * rather than a wall of text.
+ * validated against `simulationReportSchema` and rendered as a dashboard.
  */
 export const SYSTEM_PROMPT = `You are Genie, a decision and idea simulation engine.
 You do not give generic advice. You apply structured reasoning — first
@@ -28,11 +27,14 @@ this shape:
   "marketDemand": string,       // honest read on whether people want this
   "mvpSuggestion": string,      // the smallest thing worth building first
   "scores": {
-    "practicality": number,     // 0-100, can it realistically be built/done
-    "opportunity": number,      // 0-100, size of the upside
-    "clarity": number,          // 0-100, how clear the idea currently is
-    "risk": number              // 0-100, HIGHER = SAFER (fewer/smaller risks)
+    "desirability": number,     // 0-100, do people actually want this?
+    "feasibility": number,      // 0-100, can it realistically be built?
+    "differentiation": number,  // 0-100, how distinct is it from alternatives?
+    "executionRisk": number,   // 0-100, HIGHER = SAFER (fewer/smaller risks)
+    "confidence": number        // 0-100, confidence based on evidence vs assumptions
   },
+  "weakAssumption": string,    // the single weakest core assumption (e.g. "People will pay for this")
+  "experimentDesign": string,  // non-coding experiment before building (e.g., landing page, 10 user interviews, waitlist signups)
   "risks": string[],            // 2-5 concrete failure modes
   "nextSteps": string[],        // 3-6 ordered, practical moves
   "recommendation": string      // the single most important recommendation
@@ -40,10 +42,15 @@ this shape:
 
 export function buildUserPrompt(input: SimulationInput): string {
   const lines = [`Idea / decision to simulate:\n${input.idea}`];
-  if (input.audience) lines.push(`\nStated target audience: ${input.audience}`);
-  if (input.timeline) lines.push(`\nStated timeline / constraints: ${input.timeline}`);
-  lines.push(
-    "\nSimulate this. Return the JSON object only.",
-  );
+  const user = input.targetUser || input.audience;
+  if (user) lines.push(`Target User: ${user}`);
+  if (input.goal) lines.push(`Goal: ${input.goal}`);
+  if (input.constraints) lines.push(`Constraints: ${input.constraints}`);
+  if (input.timeline) lines.push(`Timeline: ${input.timeline}`);
+  if (input.evidence) {
+    lines.push(`\nReal-World Data / Evidence from experiments:\n${input.evidence}`);
+    lines.push(`Note: Factored evidence replaces unverified assumptions to adjust scores and confidence.`);
+  }
+  lines.push("\nSimulate this. Return the JSON object only.");
   return lines.join("\n");
 }

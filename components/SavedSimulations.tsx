@@ -10,10 +10,11 @@ interface SavedSimulationsProps {
 }
 
 const SCORE_KEYS: { key: keyof SavedSimulation["report"]["scores"]; label: string }[] = [
-  { key: "clarity", label: "Clr" },
-  { key: "practicality", label: "Prac" },
-  { key: "opportunity", label: "Opp" },
-  { key: "risk", label: "Safe" },
+  { key: "desirability", label: "Desir" },
+  { key: "feasibility", label: "Feas" },
+  { key: "differentiation", label: "Diff" },
+  { key: "executionRisk", label: "Risk" },
+  { key: "confidence", label: "Conf" },
 ];
 
 function scoreTone(v: number): string {
@@ -58,11 +59,23 @@ export function SavedSimulations({ refreshKey, onOpen }: SavedSimulationsProps) 
             className="flex flex-wrap items-center gap-3 rounded-xl bg-genie-card p-4 ring-1 ring-white/5"
           >
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-slate-100">{s.title}</div>
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium text-slate-100">{s.title}</span>
+                {s.decision === "BUILD" && (
+                  <span className="rounded bg-genie-good/20 px-1.5 py-0.5 text-[10px] font-semibold text-genie-good">
+                    BUILD
+                  </span>
+                )}
+                {s.decision === "DONT_BUILD" && (
+                  <span className="rounded bg-genie-bad/20 px-1.5 py-0.5 text-[10px] font-semibold text-genie-bad">
+                    DON&apos;T BUILD
+                  </span>
+                )}
+              </div>
               <div className="text-xs text-slate-500">{new Date(s.createdAt).toLocaleString()}</div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               {SCORE_KEYS.map(({ key, label }) => (
                 <div key={key} className="text-center">
                   <div className="text-[10px] uppercase text-slate-500">{label}</div>

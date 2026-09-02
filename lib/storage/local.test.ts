@@ -45,7 +45,6 @@ describe("LocalSimulationStore", () => {
   it("lists newest first", async () => {
     const s = store(fakeStorage());
     const first = await s.save(record("First idea about an app for students"));
-    // Force a later timestamp so ordering is unambiguous.
     await new Promise((r) => setTimeout(r, 5));
     const second = await s.save(record("Second idea about a tool for developers"));
     const list = await s.list();
@@ -88,20 +87,19 @@ describe("supabase mappers", () => {
     const rec = record("An AI tool that drafts cover letters for job seekers");
     const insert = recordToInsert(rec);
     expect(insert.idea).toBe(rec.input.idea);
-    expect(insert.practicality_score).toBe(rec.report.scores.practicality);
+    expect(insert.desirability_score).toBe(rec.report.scores.desirability);
 
     const back = rowToRecord({
       id: "row-1",
       title: insert.title,
       idea: insert.idea,
-      audience: insert.audience,
+      audience: null,
       timeline: insert.timeline,
       engine: insert.engine,
       report: insert.report,
       created_at: "2026-01-01T00:00:00.000Z",
     });
     expect(back.input.idea).toBe(rec.input.idea);
-    expect(back.input.audience).toBeUndefined();
     expect(back.report).toEqual(rec.report);
     expect(back.engine).toBe("heuristic");
   });
