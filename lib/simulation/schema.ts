@@ -3,8 +3,7 @@ import { z } from "zod";
 /**
  * The structured output of a Genie simulation. Every field is required so the
  * UI can render a complete dashboard without defensive checks. Scores are
- * normalized to 0-100 (higher is better, including `risk` where a higher score
- * means *lower* risk, so all four scores read "green = good").
+ * normalized to 0-100.
  */
 export const scoreSchema = z.number().int().min(0).max(100);
 
@@ -22,12 +21,21 @@ export const simulationReportSchema = z.object({
   /** The smallest thing worth building first. */
   mvpSuggestion: z.string().min(1),
   scores: z.object({
-    practicality: scoreSchema,
-    opportunity: scoreSchema,
-    clarity: scoreSchema,
-    /** Higher = safer (fewer/less severe risks). */
-    risk: scoreSchema,
+    /** Do people want this? */
+    desirability: scoreSchema,
+    /** Can it realistically be built/delivered? */
+    feasibility: scoreSchema,
+    /** Is it distinct from existing alternatives? */
+    differentiation: scoreSchema,
+    /** Higher = safer (lower execution risk). */
+    executionRisk: scoreSchema,
+    /** Overall confidence in the current model/signals. */
+    confidence: scoreSchema,
   }),
+  /** The single unverified core assumption that could sink the idea. */
+  weakAssumption: z.string().min(1),
+  /** The non-coding experiment to run first (e.g. landing page, interviews). */
+  experimentDesign: z.string().min(1),
   /** Concrete things that could go wrong. */
   risks: z.array(z.string().min(1)).min(1),
   /** Ordered, practical next moves. */
@@ -44,9 +52,15 @@ export const simulationInputSchema = z.object({
     .trim()
     .min(8, "Tell Genie a bit more — at least a sentence.")
     .max(4000, "That's a lot. Trim it down to the core idea."),
-  /** Optional context the user can volunteer up front. */
-  audience: z.string().trim().max(500).optional(),
+  /** Intent inputs */
+  targetUser: z.string().trim().max(500).optional(),
+  goal: z.string().trim().max(500).optional(),
+  constraints: z.string().trim().max(500).optional(),
   timeline: z.string().trim().max(200).optional(),
+  /** For backwards compatibility / convenience */
+  audience: z.string().trim().max(500).optional(),
+  /** Optional real-world data / evidence for re-simulation */
+  evidence: z.string().trim().max(2000).optional(),
 });
 
 export type SimulationInput = z.infer<typeof simulationInputSchema>;

@@ -7,18 +7,19 @@ import {
   type ScenarioResult,
   type ScenarioType,
 } from "@/lib/simulation/scenario";
-import type { SimulationReport } from "@/lib/simulation/schema";
+import type { SimulationInput, SimulationReport } from "@/lib/simulation/schema";
 
 interface ScenarioPanelProps {
-  input: { idea: string; audience?: string; timeline?: string };
+  input: SimulationInput;
   baseScores: SimulationReport["scores"];
 }
 
 const SCORE_LABELS: { key: keyof SimulationReport["scores"]; label: string }[] = [
-  { key: "clarity", label: "Clarity" },
-  { key: "practicality", label: "Practicality" },
-  { key: "opportunity", label: "Opportunity" },
-  { key: "risk", label: "Safety" },
+  { key: "desirability", label: "Desirability" },
+  { key: "feasibility", label: "Feasibility" },
+  { key: "differentiation", label: "Differentiation" },
+  { key: "executionRisk", label: "Execution Risk" },
+  { key: "confidence", label: "Confidence" },
 ];
 
 function Delta({ from, to }: { from: number; to: number }) {
@@ -65,9 +66,9 @@ export function ScenarioPanel({ input, baseScores }: ScenarioPanelProps) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-slate-100">Test a scenario</h2>
+        <h2 className="text-lg font-semibold text-slate-100">Simulate a scenario</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Replay the idea through a different lens and watch how the scores shift.
+          Replay the idea through different lenses and see how outcomes shift.
         </p>
       </div>
 
@@ -111,7 +112,7 @@ export function ScenarioPanel({ input, baseScores }: ScenarioPanelProps) {
 
           <p className="text-sm leading-relaxed text-slate-200">{result.report.narrative}</p>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {SCORE_LABELS.map(({ key, label }) => (
               <div key={key} className="rounded-lg bg-white/5 p-3 ring-1 ring-white/5">
                 <div className="text-xs text-slate-400">{label}</div>

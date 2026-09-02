@@ -12,7 +12,7 @@ import type { SimulationInput } from "./schema";
 
 const INPUT: SimulationInput = {
   idea: "An AI agent that helps people prepare for job interviews with mock questions.",
-  audience: "recent CS graduates",
+  targetUser: "recent CS graduates",
   timeline: "ship an MVP in 3 weeks",
 };
 
@@ -43,15 +43,14 @@ describe("heuristicScenario", () => {
   it("makes the best case more optimistic than the worst case", () => {
     const best = heuristicScenario(INPUT, base(), "optimistic");
     const worst = heuristicScenario(INPUT, base(), "pessimistic");
-    expect(best.scores.opportunity).toBeGreaterThan(worst.scores.opportunity);
-    // risk is "safety" — best case should be safer than worst case.
-    expect(best.scores.risk).toBeGreaterThan(worst.scores.risk);
+    expect(best.scores.desirability).toBeGreaterThan(worst.scores.desirability);
+    expect(best.scores.executionRisk).toBeGreaterThan(worst.scores.executionRisk);
   });
 
-  it("makes the cheap MVP path more practical than the baseline", () => {
+  it("makes the cheap MVP path more feasible than the baseline", () => {
     const b = base();
     const cheap = heuristicScenario(INPUT, b, "low_budget");
-    expect(cheap.scores.practicality).toBeGreaterThanOrEqual(b.scores.practicality);
+    expect(cheap.scores.feasibility).toBeGreaterThanOrEqual(b.scores.feasibility);
   });
 
   it("keeps every score within 0-100", () => {

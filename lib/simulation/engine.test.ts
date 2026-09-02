@@ -39,25 +39,27 @@ describe("heuristicSimulation", () => {
     }
   });
 
-  it("rewards a clearer, more complete idea with higher clarity", () => {
-    const vague = heuristicSimulation({ idea: "I want to build something cool, maybe an app of some kind." });
-    const sharp = heuristicSimulation({
-      idea: "A subscription budgeting app for freelance designers who struggle with irregular income.",
-      audience: "freelance designers",
-      timeline: "ship an MVP in 3 weeks",
-    });
-    expect(sharp.scores.clarity).toBeGreaterThan(vague.scores.clarity);
+  it("rewards explicit evidence with higher confidence", () => {
+    const base = heuristicSimulation(idea());
+    const withEvidence = heuristicSimulation(idea({ evidence: "Interviewed 10 users, 8 signed up on waitlist." }));
+    expect(withEvidence.scores.confidence).toBeGreaterThan(base.scores.confidence);
   });
 
-  it("flags a missing audience as a risk", () => {
+  it("flags a missing target user as a risk", () => {
     const report = heuristicSimulation({ idea: "A platform that does many useful things for many people." });
-    expect(report.risks.join(" ").toLowerCase()).toContain("audience");
+    expect(report.risks.join(" ").toLowerCase()).toContain("user");
   });
 
-  it("treats high-complexity domains as less safe", () => {
+  it("treats high-complexity domains as carrying higher execution risk", () => {
     const hardware = heuristicSimulation({ idea: "A hardware IoT sensor device for smart farming on real farms." });
     const content = heuristicSimulation({ idea: "A weekly newsletter and blog about cooking for busy parents." });
-    expect(hardware.scores.risk).toBeLessThan(content.scores.risk);
+    expect(hardware.scores.executionRisk).toBeLessThan(content.scores.executionRisk);
+  });
+
+  it("includes a weak assumption and experiment design", () => {
+    const report = heuristicSimulation(idea());
+    expect(report.weakAssumption.length).toBeGreaterThan(0);
+    expect(report.experimentDesign.length).toBeGreaterThan(0);
   });
 });
 
