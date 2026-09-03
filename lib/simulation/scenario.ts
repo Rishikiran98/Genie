@@ -8,6 +8,7 @@ import {
   type SimulationInput,
   type SimulationReport,
 } from "./schema";
+import { logCompleted, logLlmFailure } from "./telemetry";
 
 /**
  * Scenario testing: take an idea and replay it through a specific lens —
@@ -263,17 +264,21 @@ export async function llmScenario(
 export async function runScenario(input: SimulationInput, type: ScenarioType): Promise<ScenarioResult> {
   const base = heuristicSimulation(input);
   const config = readLlmConfig();
+  const startedAt = Date.now();
 
   if (config) {
     try {
       const report = await llmScenario(input, base, type, config);
+      logCompleted("scenario", "llm", true, startedAt);
       return { report, engine: "llm" };
     } catch (err) {
-      console.warn("Genie LLM scenario failed, using heuristic fallback:", err);
+      logLlmFailure("scenario", err);
     }
   }
 
-  return { report: heuristicScenario(input, base, type), engine: "heuristic" };
+  const result: ScenarioResult = { report: heuristicScenario(input, base, type), engine: "heuristic" };
+  logCompleted("scenario", "heuristic", Boolean(config), startedAt);
+  return result;
 }
 
 export async function scenarioFromRaw(raw: unknown): Promise<ScenarioResult> {

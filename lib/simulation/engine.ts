@@ -1,6 +1,7 @@
 import { heuristicSimulation } from "./heuristic";
 import { llmSimulation, readLlmConfig } from "./provider";
 import { simulationInputSchema, type SimulationInput, type SimulationResult } from "./schema";
+import { logCompleted, logLlmFailure } from "./telemetry";
 
 /**
  * Runs a simulation for a validated input.
@@ -15,18 +16,22 @@ import { simulationInputSchema, type SimulationInput, type SimulationResult } fr
  */
 export async function runSimulation(input: SimulationInput): Promise<SimulationResult> {
   const config = readLlmConfig();
+  const startedAt = Date.now();
 
   if (config) {
     try {
       const report = await llmSimulation(input, config);
+      logCompleted("simulate", "llm", true, startedAt);
       return { report, engine: "llm" };
     } catch (err) {
       // Soft-fail to the heuristic engine; never leave the user empty-handed.
-      console.warn("Genie LLM simulation failed, using heuristic fallback:", err);
+      logLlmFailure("simulate", err);
     }
   }
 
-  return { report: heuristicSimulation(input), engine: "heuristic" };
+  const result: SimulationResult = { report: heuristicSimulation(input), engine: "heuristic" };
+  logCompleted("simulate", "heuristic", Boolean(config), startedAt);
+  return result;
 }
 
 /** Parses + validates raw input, then runs the simulation. Throws ZodError on bad input. */

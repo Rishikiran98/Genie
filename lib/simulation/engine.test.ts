@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { heuristicSimulation } from "./heuristic";
 import { runSimulation } from "./engine";
-import { extractJson, llmSimulation, readLlmConfig } from "./provider";
+import { ZodError } from "zod";
+import {
+  DEFAULT_LLM_TIMEOUT_MS,
+  LlmError,
+  classifyLlmError,
+  extractJson,
+  llmSimulation,
+  readLlmConfig,
+  readLlmTimeoutMs,
+} from "./provider";
 import { simulationInputSchema, simulationReportSchema } from "./schema";
 import type { SimulationInput } from "./schema";
 
@@ -112,5 +121,60 @@ describe("provider helpers", () => {
     await expect(
       llmSimulation(idea(), { apiKey: "k", baseUrl: "https://x.test/v1", model: "m" }, fakeFetch),
     ).rejects.toThrow();
+  });
+
+  it("reads the timeout from the environment with a sane default", () => {
+    expect(readLlmTimeoutMs({})).toBe(DEFAULT_LLM_TIMEOUT_MS);
+    expect(readLlmTimeoutMs({ GENIE_LLM_TIMEOUT_MS: "5000" })).toBe(5000);
+    expect(readLlmTimeoutMs({ GENIE_LLM_TIMEOUT_MS: "-1" })).toBe(DEFAULT_LLM_TIMEOUT_MS);
+    expect(readLlmConfig({ GENIE_LLM_API_KEY: "k", GENIE_LLM_TIMEOUT_MS: "1234" })?.timeoutMs).toBe(1234);
+  });
+
+  it("classifies failures so the fallback rate can be broken down by cause", async () => {
+    const cfg = { apiKey: "k", baseUrl: "https://x.test/v1", model: "m", timeoutMs: 20 };
+    const call = (f: unknown) => llmSimulation(idea(), cfg, f as typeof fetch).catch((e) => e);
+
+    const status = await call(async () => new Response("nope", { status: 503 }));
+    expect(status).toBeInstanceOf(LlmError);
+    expect(classifyLlmError(status)).toBe("status");
+    expect((status as LlmError).status).toBe(503);
+
+    const network = await call(async () => {
+      throw new TypeError("fetch failed");
+    });
+    expect(classifyLlmError(network)).toBe("network");
+
+    const notJson = await call(async () => new Response("<html>", { status: 200 }));
+    expect(classifyLlmError(notJson)).toBe("schema");
+
+    const noObject = await call(
+      async () => new Response(JSON.stringify({ choices: [{ message: { content: "just prose" } }] }), { status: 200 }),
+    );
+    expect(classifyLlmError(noObject)).toBe("schema");
+
+    const badShape = await call(
+      async () => new Response(JSON.stringify({ choices: [{ message: { content: "{\"summary\":1}" } }] }), { status: 200 }),
+    );
+    expect(badShape).toBeInstanceOf(ZodError);
+    expect(classifyLlmError(badShape)).toBe("schema");
+
+    expect(classifyLlmError(new Error("?"))).toBe("unknown");
+  });
+
+  it("aborts a hung upstream call once the timeout elapses", async () => {
+    // A fetch that never resolves on its own but honours the abort signal,
+    // like a real fetch against a stalled server.
+    const hungFetch = ((_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      })) as unknown as typeof fetch;
+
+    const err = await llmSimulation(
+      idea(),
+      { apiKey: "k", baseUrl: "https://x.test/v1", model: "m", timeoutMs: 20 },
+      hungFetch,
+    ).catch((e) => e);
+    expect(err).toBeInstanceOf(LlmError);
+    expect(classifyLlmError(err)).toBe("timeout");
   });
 });
