@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { AuthPanel } from "@/components/AuthPanel";
 import { SimulationDashboard } from "@/components/SimulationDashboard";
 import { ScenarioPanel } from "@/components/ScenarioPanel";
 import { ActionPlanPanel } from "@/components/ActionPlanPanel";
@@ -31,6 +32,7 @@ export default function Home() {
 
   const [savedRefresh, setSavedRefresh] = useState(0);
   const [savedThis, setSavedThis] = useState(false);
+  const refreshSaved = useCallback(() => setSavedRefresh((n) => n + 1), []);
 
   async function simulate(e?: React.FormEvent, customPayload?: SimulationInput) {
     if (e) e.preventDefault();
@@ -255,6 +257,7 @@ export default function Home() {
         </div>
       )}
 
+      <AuthPanel onAuthChange={refreshSaved} />
       <SavedSimulations refreshKey={savedRefresh} onOpen={openSaved} />
     </main>
   );

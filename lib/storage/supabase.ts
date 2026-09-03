@@ -17,7 +17,16 @@ interface SimulationRow {
   engine: string;
   report: SimulationReport;
   decision?: string | null;
+  user_id?: string | null;
   created_at: string;
+}
+
+/** Thrown when a write needs an owner but nobody is signed in. */
+export class NoSessionError extends Error {
+  constructor() {
+    super("Sign in to save simulations to Supabase.");
+    this.name = "NoSessionError";
+  }
 }
 
 /** Maps a database row to the app's record shape. Pure — unit-tested directly. */
@@ -42,7 +51,7 @@ export function rowToRecord(row: SimulationRow): SavedSimulation {
 }
 
 /** Maps a record to an insert payload, also populating queryable columns. */
-export function recordToInsert(record: NewSavedSimulation) {
+export function recordToInsert(record: NewSavedSimulation, userId?: string) {
   return {
     title: record.title,
     idea: record.input.idea,
@@ -61,34 +70,62 @@ export function recordToInsert(record: NewSavedSimulation) {
     recommendation: record.report.recommendation,
     report: record.report,
     decision: record.decision ?? null,
+    ...(userId ? { user_id: userId } : {}),
   };
 }
 
+/** Resolves the signed-in user's id from the client's current session, or null. */
+export async function currentUserId(client: SupabaseClient): Promise<string | null> {
+  const { data } = await client.auth.getSession();
+  return data.session?.user?.id ?? null;
+}
+
+/**
+ * Supabase-backed store. Every row is owned by the signed-in user: `save`
+ * stamps `user_id` from the live session (and refuses without one), and the
+ * RLS policies in migration 0002 make reads/deletes owner-only server-side —
+ * the filters here are belt-and-braces, not the security boundary.
+ */
 export class SupabaseSimulationStore implements SimulationStore {
   constructor(private readonly client: SupabaseClient) {}
 
+  private async requireUserId(): Promise<string> {
+    const id = await currentUserId(this.client);
+    if (!id) throw new NoSessionError();
+    return id;
+  }
+
   async list(): Promise<SavedSimulation[]> {
+    const userId = await this.requireUserId();
     const { data, error } = await this.client
       .from(TABLE)
       .select("*")
+      .eq("user_id", userId)
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return (data as SimulationRow[]).map(rowToRecord);
   }
 
   async save(record: NewSavedSimulation): Promise<SavedSimulation> {
-    const { data, error } = await this.client.from(TABLE).insert(recordToInsert(record)).select().single();
+    const userId = await this.requireUserId();
+    const { data, error } = await this.client
+      .from(TABLE)
+      .insert(recordToInsert(record, userId))
+      .select()
+      .single();
     if (error) throw new Error(error.message);
     return rowToRecord(data as SimulationRow);
   }
 
   async remove(id: string): Promise<void> {
-    const { error } = await this.client.from(TABLE).delete().eq("id", id);
+    const userId = await this.requireUserId();
+    const { error } = await this.client.from(TABLE).delete().eq("id", id).eq("user_id", userId);
     if (error) throw new Error(error.message);
   }
 
   async clear(): Promise<void> {
-    const { error } = await this.client.from(TABLE).delete().not("id", "is", null);
+    const userId = await this.requireUserId();
+    const { error } = await this.client.from(TABLE).delete().eq("user_id", userId);
     if (error) throw new Error(error.message);
   }
 }
