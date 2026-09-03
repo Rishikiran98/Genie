@@ -64,6 +64,24 @@ GENIE_LLM_MODEL=gpt-4o-mini
 The report's badge shows whether it came from the **LLM engine** or the
 **Offline engine**.
 
+## API behaviour
+
+All three routes (`/api/simulate`, `/api/scenario`, `/api/actionplan`) are
+`POST` with a JSON body and share the same guards:
+
+| Status | When                                                        |
+| ------ | ----------------------------------------------------------- |
+| `200`  | Report generated (`engine` says `"llm"` or `"heuristic"`)    |
+| `400`  | Malformed JSON, or validation failed (`issues` lists them)   |
+| `413`  | Body larger than 32 KB                                       |
+| `429`  | More than `GENIE_RATE_LIMIT` requests/min from one IP on that route (`Retry-After` header set) |
+| `500`  | Unexpected error                                             |
+
+Every error response is `{ "error": string }`. Rate limiting is in-memory and
+therefore per instance on serverless hosts; LLM calls are capped by
+`GENIE_LLM_TIMEOUT_MS` (default 20 s) and fall back to the offline engine on
+timeout.
+
 ## Scripts
 
 | Command            | What it does                          |
@@ -83,6 +101,9 @@ app/
   api/scenario/route.ts    # POST: validate → run one scenario → JSON
   api/actionplan/route.ts  # POST: validate → generate action plan → JSON
 components/                # Dashboard, score cards, scenario/action-plan/saved panels
+lib/
+  http.ts                  # Shared route pipeline: rate limit → size guard → parse → run
+  ratelimit.ts             # In-memory fixed-window limiter (per IP, per route)
 lib/simulation/
   schema.ts                # Zod schema + types (the report contract)
   prompt.ts                # System / user prompt templates

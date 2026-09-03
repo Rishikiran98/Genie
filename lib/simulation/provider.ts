@@ -5,6 +5,19 @@ export interface LlmConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
+  /** Per-request timeout in ms. Defaults to `DEFAULT_LLM_TIMEOUT_MS`. */
+  timeoutMs?: number;
+}
+
+/** Upper bound on a single LLM call; a hung upstream must not hang the route. */
+export const DEFAULT_LLM_TIMEOUT_MS = 20_000;
+
+/** Reads `GENIE_LLM_TIMEOUT_MS`, falling back to the default on missing or bad values. */
+export function readLlmTimeoutMs(env: Record<string, string | undefined> = process.env): number {
+  const raw = env.GENIE_LLM_TIMEOUT_MS?.trim();
+  if (!raw) return DEFAULT_LLM_TIMEOUT_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_LLM_TIMEOUT_MS;
 }
 
 /**
@@ -21,6 +34,7 @@ export function readLlmConfig(
     apiKey,
     baseUrl: (env.GENIE_LLM_BASE_URL?.trim() || "https://api.openai.com/v1").replace(/\/$/, ""),
     model: env.GENIE_LLM_MODEL?.trim() || "gpt-4o-mini",
+    timeoutMs: readLlmTimeoutMs(env),
   };
 }
 
@@ -39,8 +53,11 @@ export function extractJson(content: string): unknown {
 /**
  * Calls an OpenAI-compatible Chat Completions endpoint with a system + user
  * message pair, expects a JSON object back, and returns it parsed (but not yet
- * schema-validated). Throws on any network or parsing failure so callers can
- * decide whether to fall back. Shared by every LLM-backed feature.
+ * schema-validated). Throws on any network, timeout, or parsing failure so
+ * callers can decide whether to fall back. The call is bounded by
+ * `config.timeoutMs` via `AbortSignal.timeout`, which rejects the fetch with a
+ * `TimeoutError` — a hung upstream never hangs the route. Shared by every
+ * LLM-backed feature.
  */
 export async function chatJson(
   config: LlmConfig,
@@ -50,6 +67,7 @@ export async function chatJson(
 ): Promise<unknown> {
   const res = await fetchImpl(`${config.baseUrl}/chat/completions`, {
     method: "POST",
+    signal: AbortSignal.timeout(config.timeoutMs ?? DEFAULT_LLM_TIMEOUT_MS),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${config.apiKey}`,
