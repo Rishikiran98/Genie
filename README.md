@@ -108,9 +108,12 @@ Client IPs are logged only as a salted hash (`ipHash`). Set `GENIE_LOG_LEVEL`
 | ------------------ | ------------------------------------- |
 | `npm run dev`      | Start the dev server                  |
 | `npm run build`    | Production build                      |
-| `npm run test`     | Run the engine unit tests (Vitest)    |
+| `npm run test`     | Engine unit tests + route integration tests (Vitest) |
+| `npm run test:coverage` | Same, with a v8 coverage report (no threshold yet) |
 | `npm run typecheck`| Type-check with `tsc`                 |
 | `npm run lint`     | Next.js / ESLint                      |
+
+CI runs lint → typecheck → tests with coverage → build on every push and PR.
 
 ## Project layout
 
@@ -121,6 +124,7 @@ app/
   api/scenario/route.ts    # POST: validate → run one scenario → JSON
   api/actionplan/route.ts  # POST: validate → generate action plan → JSON
   api/health/route.ts      # GET: { status, llmConfigured, store }
+  api/*/route.test.ts      # Route-level integration tests (handlers called with Request objects)
 components/                # Dashboard, score cards, scenario/action-plan/saved panels
 lib/
   http.ts                  # Shared route pipeline: rate limit → size guard → parse → run → log

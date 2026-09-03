@@ -12,5 +12,11 @@ export default defineConfig({
     // Keep structured log lines out of test output; tests that assert on logs
     // build their own logger or set GENIE_LOG_LEVEL themselves.
     env: { GENIE_LOG_LEVEL: "silent" },
+    coverage: {
+      provider: "v8",
+      include: ["lib/**/*.ts", "app/api/**/*.ts"],
+      exclude: ["**/*.test.ts"],
+      reporter: ["text", "lcov"],
+    },
   },
 });
