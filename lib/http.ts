@@ -1,5 +1,7 @@
+import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { log, serializeError } from "./log";
 import { clientIp, getRateLimiter, type RateLimiter } from "./ratelimit";
 
 /**
@@ -10,6 +12,19 @@ import { clientIp, getRateLimiter, type RateLimiter } from "./ratelimit";
 
 /** Largest request body the routes accept, in bytes (32 KB). */
 export const MAX_BODY_BYTES = 32 * 1024;
+
+/**
+ * Salt for IP hashing. `GENIE_IP_HASH_SALT` keeps hashes stable across
+ * instances and restarts (so one client can be correlated); without it a
+ * random per-process salt is used and hashes are only stable within one
+ * process. Either way the raw address never reaches the logs.
+ */
+const IP_HASH_SALT = process.env.GENIE_IP_HASH_SALT?.trim() || randomBytes(16).toString("hex");
+
+/** Short, salted SHA-256 of a client address — safe to log and to group by. */
+export function hashIp(ip: string, salt: string = IP_HASH_SALT): string {
+  return createHash("sha256").update(`${salt}:${ip}`).digest("hex").slice(0, 16);
+}
 
 export type BodyReadResult =
   | { ok: true; text: string }
@@ -73,20 +88,35 @@ export function createJsonHandler<T>(options: JsonHandlerOptions<T>): (request: 
   const { route, run, maxBodyBytes = MAX_BODY_BYTES } = options;
 
   return async function handler(request: Request): Promise<Response> {
+    const startedAt = Date.now();
+    const ip = clientIp(request);
+    const ipHash = hashIp(ip);
+    log.info("request.received", { route, ipHash });
+
+    const respond = (status: number, payload: unknown, headers?: HeadersInit, reason?: string): Response => {
+      log.info("request.completed", { route, ipHash, status, durationMs: Date.now() - startedAt, reason });
+      return NextResponse.json(payload, { status, headers });
+    };
+
     const limiter = options.limiter ?? getRateLimiter();
-    const verdict = await limiter.check(`${route}:${clientIp(request)}`);
+    const verdict = await limiter.check(`${route}:${ip}`);
     if (!verdict.allowed) {
-      return NextResponse.json(
+      log.warn("ratelimit.exceeded", { route, ipHash, retryAfterSeconds: verdict.retryAfterSeconds });
+      return respond(
+        429,
         { error: `Too many requests. Try again in ${verdict.retryAfterSeconds}s.` },
-        { status: 429, headers: { "Retry-After": String(verdict.retryAfterSeconds) } },
+        { "Retry-After": String(verdict.retryAfterSeconds) },
+        "rate_limited",
       );
     }
 
     const read = await readBodyWithLimit(request, maxBodyBytes);
     if (!read.ok) {
-      return NextResponse.json(
+      return respond(
+        413,
         { error: `Request body is too large (limit ${Math.floor(maxBodyBytes / 1024)} KB).` },
-        { status: 413 },
+        undefined,
+        "body_too_large",
       );
     }
 
@@ -94,21 +124,23 @@ export function createJsonHandler<T>(options: JsonHandlerOptions<T>): (request: 
     try {
       body = JSON.parse(read.text);
     } catch {
-      return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+      return respond(400, { error: "Request body must be valid JSON." }, undefined, "invalid_json");
     }
 
     try {
       const result = await run(body);
-      return NextResponse.json(result);
+      return respond(200, result);
     } catch (err) {
       if (err instanceof ZodError) {
-        return NextResponse.json(
+        return respond(
+          400,
           { error: err.issues[0]?.message ?? "Invalid input.", issues: err.issues },
-          { status: 400 },
+          undefined,
+          "validation_failed",
         );
       }
-      console.error(`Unexpected ${route} error:`, err);
-      return NextResponse.json({ error: "Genie hit an unexpected error. Please try again." }, { status: 500 });
+      log.error("request.failed", { route, ipHash, ...serializeError(err) });
+      return respond(500, { error: "Genie hit an unexpected error. Please try again." }, undefined, "unexpected");
     }
   };
 }

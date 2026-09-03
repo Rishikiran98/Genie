@@ -9,5 +9,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["lib/**/*.test.ts", "app/**/*.test.ts"],
+    // Keep structured log lines out of test output; tests that assert on logs
+    // build their own logger or set GENIE_LOG_LEVEL themselves.
+    env: { GENIE_LOG_LEVEL: "silent" },
   },
 });

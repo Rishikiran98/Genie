@@ -7,6 +7,7 @@ import {
   type SimulationInput,
   type SimulationReport,
 } from "./schema";
+import { logCompleted, logLlmFailure } from "./telemetry";
 
 /**
  * Action plan generator: turn a simulation into something you can act on
@@ -244,17 +245,21 @@ export async function llmActionPlan(
 export async function runActionPlan(input: SimulationInput): Promise<ActionPlanResult> {
   const base = heuristicSimulation(input);
   const config = readLlmConfig();
+  const startedAt = Date.now();
 
   if (config) {
     try {
       const report = await llmActionPlan(input, base, config);
+      logCompleted("actionplan", "llm", true, startedAt);
       return { report, engine: "llm" };
     } catch (err) {
-      console.warn("Genie LLM action plan failed, using heuristic fallback:", err);
+      logLlmFailure("actionplan", err);
     }
   }
 
-  return { report: heuristicActionPlan(input, base), engine: "heuristic" };
+  const result: ActionPlanResult = { report: heuristicActionPlan(input, base), engine: "heuristic" };
+  logCompleted("actionplan", "heuristic", Boolean(config), startedAt);
+  return result;
 }
 
 export async function actionPlanFromRaw(raw: unknown): Promise<ActionPlanResult> {

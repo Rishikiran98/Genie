@@ -82,6 +82,26 @@ therefore per instance on serverless hosts; LLM calls are capped by
 `GENIE_LLM_TIMEOUT_MS` (default 20 s) and fall back to the offline engine on
 timeout.
 
+`GET /api/health` returns `{ status: "ok", llmConfigured, store }` where
+`store` is `"supabase"` or `"local"`. It reads configuration only — no secrets,
+no upstream calls — so it is safe for uptime probes.
+
+## Observability
+
+Genie writes one JSON object per line to stdout (`lib/log.ts`), no vendor
+required. The events that matter:
+
+- `simulation.completed` — `feature`, `engine` (`llm`/`heuristic`),
+  `llmConfigured`, `fallback`, `durationMs`. **Fallback rate** is the share of
+  these lines with `"fallback":true` among those with `"llmConfigured":true`.
+- `llm.failed` — one per silent fallback, with `errorKind` set to `network`,
+  `timeout`, `status`, `schema`, or `unknown`, so you can see *why*.
+- `ratelimit.exceeded`, `request.received` / `request.completed`,
+  `request.failed` (500s, with stack).
+
+Client IPs are logged only as a salted hash (`ipHash`). Set `GENIE_LOG_LEVEL`
+(`debug` … `silent`) to tune verbosity.
+
 ## Scripts
 
 | Command            | What it does                          |
@@ -100,16 +120,19 @@ app/
   api/simulate/route.ts    # POST: validate → simulate → JSON
   api/scenario/route.ts    # POST: validate → run one scenario → JSON
   api/actionplan/route.ts  # POST: validate → generate action plan → JSON
+  api/health/route.ts      # GET: { status, llmConfigured, store }
 components/                # Dashboard, score cards, scenario/action-plan/saved panels
 lib/
-  http.ts                  # Shared route pipeline: rate limit → size guard → parse → run
+  http.ts                  # Shared route pipeline: rate limit → size guard → parse → run → log
   ratelimit.ts             # In-memory fixed-window limiter (per IP, per route)
+  log.ts                   # Structured JSON logger (stdout)
 lib/simulation/
   schema.ts                # Zod schema + types (the report contract)
   prompt.ts                # System / user prompt templates
   heuristic.ts             # Deterministic offline engine
   provider.ts              # OpenAI-compatible LLM adapter (shared chatJson)
   engine.ts                # Simulation dispatch + fallback logic
+  telemetry.ts             # Fallback / completion log events shared by dispatchers
   scenario.ts              # Scenario lenses, engine + dispatch
   actionplan.ts            # Action plan engine + dispatch
   *.test.ts                # Unit tests per module
