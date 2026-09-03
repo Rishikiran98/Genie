@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+build
+coverage
+.git
+.github
+*.log
+.env
+.env*.local
+.DS_Store
+docs
+README.md
+LICENSE
+supabase/verify_rls.sh
+**/*.test.ts

@@ -186,6 +186,18 @@ select/insert/update/delete plus anonymous denial. It was run against
 Postgres 16 before this landed. Verify against your own project after
 applying (sign in as two users and confirm neither sees the other's rows).
 
+## Deployment
+
+- **Docker** — `docker build -t genie . && docker run -p 3000:3000 genie`
+  gives you the zero-config app; pass `GENIE_*` settings with `-e` and the
+  `NEXT_PUBLIC_SUPABASE_*` values as `--build-arg`. Multi-stage, standalone
+  Next.js output, non-root user, health check on `/api/health`.
+- **Any Node host / Vercel** — `npm run build && npm start`.
+
+[docs/OPERATIONS.md](docs/OPERATIONS.md) covers every environment variable,
+the rate-limit behaviour and its serverless caveat, how to read the logs and
+compute the fallback rate, the health endpoint, Docker, and Supabase setup.
+
 ## Tech stack
 
 Next.js (App Router) · TypeScript · Tailwind CSS · Zod · Vitest.
