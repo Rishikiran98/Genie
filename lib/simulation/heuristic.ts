@@ -51,12 +51,174 @@ const DOMAINS: { name: string; keywords: string[]; complexity: number }[] = [
 
 const PRICING_WORDS = ["$", "subscription", "charge", "pricing", "per month", "/month", "free tier", "freemium"];
 
+/**
+ * Regulatory / licensing language. Any of these in the constraints or the idea
+ * means an external authority can veto the idea outright, which outranks every
+ * other risk. Matched case-insensitively as substrings.
+ */
+const REGULATORY_WORDS = [
+  "regulation",
+  "regulatory",
+  "regulated",
+  "licence",
+  "license",
+  "licensing",
+  "permit",
+  "compliance",
+  "compliant",
+  "hipaa",
+  "fda",
+  "gdpr",
+  "health code",
+  "food safety",
+  "cottage food",
+  "insurance",
+  "liability",
+  "legal",
+  "kyc",
+  "aml",
+];
+
+const SOLO_WORDS = [
+  "solo founder",
+  "solo",
+  "just me",
+  "by myself",
+  "myself",
+  "no team",
+  "no cofounder",
+  "no co-founder",
+  "one person",
+  "single founder",
+  "non-technical",
+  "no engineers",
+  "no developer",
+];
+
+const SINGLE_MARKET_WORDS = [
+  "one neighborhood",
+  "one neighbourhood",
+  "single neighborhood",
+  "single neighbourhood",
+  "one city",
+  "single city",
+  "one town",
+  "one market",
+  "single market",
+  "one region",
+  "one campus",
+  "one school",
+  "local only",
+  "only locally",
+];
+
+/** Budget thresholds, USD. Below `SHOESTRING` there is no room for paid acquisition or hiring at all. */
+const BUDGET_SHOESTRING_USD = 5_000;
+/** Below `TIGHT` you can buy some validation but not a build team. */
+const BUDGET_TIGHT_USD = 25_000;
+
+/** What the constraints field actually says, rather than whether it was filled in. */
+export interface ConstraintSignals {
+  /** The raw constraints text, trimmed (empty when absent). */
+  raw: string;
+  /** A hard budget figure in USD when one was stated. */
+  budgetUsd: number | null;
+  /** 0 = none or comfortable, 1 = tight (< $25k), 2 = shoestring (< $5k or explicitly none). */
+  budgetSeverity: 0 | 1 | 2;
+  /** The user's own words for the budget clause, for quoting back. */
+  budgetQuote: string | null;
+  soloFounder: boolean;
+  soloQuote: string | null;
+  singleMarket: boolean;
+  singleMarketQuote: string | null;
+  /** The user's own words for the regulatory clause, when one exists. */
+  regulatoryQuote: string | null;
+}
+
+/** Splits a free-text constraints field into its clauses ("$2,000 budget", "solo founder", ...). */
+function clauses(text: string): string[] {
+  return text
+    // Commas separate clauses unless they are thousands separators ("$2,000").
+    .split(/,(?!\d{3})|[;\n]|\band\b/i)
+    .map((c) => c.trim().replace(/^[-–—•\s]+|[.\s]+$/g, ""))
+    .filter(Boolean);
+}
+
+/** Returns the first clause containing any of `words`, in the user's own words. */
+function quoteClause(text: string, words: string[]): string | null {
+  for (const clause of clauses(text)) {
+    const lower = clause.toLowerCase();
+    if (words.some((w) => lower.includes(w))) return clause;
+  }
+  return null;
+}
+
+/** Parses a dollar figure like "$2,000", "$2k", "2k budget", "$1.5m". Returns the smallest one found. */
+function parseBudgetUsd(text: string): number | null {
+  const pattern = /\$\s?(\d[\d,]*(?:\.\d+)?)\s*([km])?\b|\b(\d[\d,]*(?:\.\d+)?)\s*([km])\b(?=[^\n]*budget)/gi;
+  let smallest: number | null = null;
+  for (const m of text.matchAll(pattern)) {
+    const digits = (m[1] ?? m[3] ?? "").replace(/,/g, "");
+    const unit = (m[2] ?? m[4] ?? "").toLowerCase();
+    if (!digits) continue;
+    let value = Number(digits);
+    if (unit === "k") value *= 1_000;
+    if (unit === "m") value *= 1_000_000;
+    if (!Number.isFinite(value)) continue;
+    smallest = smallest === null ? value : Math.min(smallest, value);
+  }
+  return smallest;
+}
+
+export function analyzeConstraints(input: SimulationInput): ConstraintSignals {
+  const raw = input.constraints?.trim() ?? "";
+  const lower = raw.toLowerCase();
+  const ideaLower = input.idea.toLowerCase();
+
+  const budgetUsd = parseBudgetUsd(raw);
+  const explicitlyNoBudget = /\b(no|zero|\$0)\s*budget\b|\bbootstrapp/i.test(raw);
+  const budgetSeverity: 0 | 1 | 2 =
+    explicitlyNoBudget || (budgetUsd !== null && budgetUsd < BUDGET_SHOESTRING_USD)
+      ? 2
+      : budgetUsd !== null && budgetUsd < BUDGET_TIGHT_USD
+        ? 1
+        : 0;
+
+  const soloFounder = SOLO_WORDS.some((w) => lower.includes(w));
+  const singleMarket = SINGLE_MARKET_WORDS.some((w) => lower.includes(w));
+
+  // Regulation can be stated as a constraint or be inherent in the idea itself
+  // ("a HIPAA-compliant patient app"). Quote the constraints clause when there
+  // is one, else the matching words from the idea.
+  const regulatoryQuote =
+    quoteClause(raw, REGULATORY_WORDS) ??
+    (() => {
+      const hit = REGULATORY_WORDS.find((w) => ideaLower.includes(w));
+      if (!hit) return null;
+      const match = input.idea.match(new RegExp(`[\\w-]*${hit.replace(/\s+/g, "\\s+")}[\\w-]*`, "i"));
+      return match?.[0] ?? hit;
+    })();
+
+  return {
+    raw,
+    budgetUsd,
+    budgetSeverity,
+    budgetQuote: budgetSeverity > 0 ? (quoteClause(raw, ["$", "budget", "bootstrapp"]) ?? raw) : null,
+    soloFounder,
+    soloQuote: soloFounder ? quoteClause(raw, SOLO_WORDS) : null,
+    singleMarket,
+    singleMarketQuote: singleMarket ? quoteClause(raw, SINGLE_MARKET_WORDS) : null,
+    regulatoryQuote,
+  };
+}
+
 interface Signals {
   text: string;
   wordCount: number;
   hasAudience: boolean;
   hasGoal: boolean;
   hasConstraints: boolean;
+  constraints: ConstraintSignals;
   hasTimeline: boolean;
   hasPricing: boolean;
   hasEvidence: boolean;
@@ -100,6 +262,7 @@ function analyze(input: SimulationInput): Signals {
     hasAudience: Boolean(targetUser.trim()) || namesAnAudience,
     hasGoal: Boolean(input.goal?.trim()),
     hasConstraints: Boolean(input.constraints?.trim()),
+    constraints: analyzeConstraints(input),
     hasTimeline: Boolean(input.timeline?.trim()) || countHits(combinedText, timelineMarkers) > 0,
     hasPricing: countHits(combinedText, PRICING_WORDS) > 0,
     hasEvidence: Boolean(input.evidence?.trim()),
@@ -123,10 +286,30 @@ function scoreDesirability(s: Signals): number {
   return clamp(score);
 }
 
+/**
+ * How much each severe constraint costs. Constraints are not a bonus for
+ * "thinking clearly" here — that credit lives in confidence. A stated
+ * constraint that makes the build harder must make the score lower.
+ */
+const CONSTRAINT_COST = {
+  feasibility: { shoestring: 10, tight: 5, solo: 5, regulatory: 10 },
+  // Execution risk is "higher = safer", so these are subtracted from safety.
+  safety: { shoestring: 6, tight: 3, solo: 6, regulatory: 12 },
+} as const;
+
+function constraintCost(c: ConstraintSignals, table: { shoestring: number; tight: number; solo: number; regulatory: number }): number {
+  let cost = 0;
+  if (c.budgetSeverity === 2) cost += table.shoestring;
+  if (c.budgetSeverity === 1) cost += table.tight;
+  if (c.soloFounder) cost += table.solo;
+  if (c.regulatoryQuote) cost += table.regulatory;
+  return cost;
+}
+
 function scoreFeasibility(s: Signals): number {
   let score = 65;
   score -= s.totalComplexity;
-  if (s.hasConstraints) score += 8;
+  score -= constraintCost(s.constraints, CONSTRAINT_COST.feasibility);
   if (s.hasTimeline) score += 8;
   if (s.mvpHits > 0) score += 8;
   if (s.wordCount < 6) score -= 10;
@@ -146,9 +329,9 @@ function scoreExecutionRisk(s: Signals): number {
   // Higher = safer (fewer risks)
   let score = 60;
   score -= s.totalComplexity;
+  score -= constraintCost(s.constraints, CONSTRAINT_COST.safety);
   if (!s.hasAudience) score -= 12;
   if (s.hasTimeline) score += 8;
-  if (s.hasConstraints) score += 8;
   score -= s.vagueHits * 6;
   if (s.hasEvidence) score += 10;
   return clamp(score);
@@ -158,6 +341,9 @@ function scoreConfidence(s: Signals): number {
   let score = 55;
   if (s.hasAudience) score += 10;
   if (s.hasTimeline) score += 5;
+  // Naming constraints at all is mild evidence the author has thought it
+  // through — worth a little confidence, never feasibility.
+  if (s.hasConstraints) score += 4;
   if (s.hasEvidence) score += 20;
   if (s.vagueHits > 0) score -= 10;
   return clamp(score);
@@ -170,8 +356,30 @@ export function shortTopic(idea: string): string {
   return words.slice(0, 14).join(" ") + "…";
 }
 
-function buildRisks(s: Signals): string[] {
+/** One risk line per detected constraint, quoting the user's own words. Regulatory first. */
+function constraintRisks(c: ConstraintSignals): string[] {
   const risks: string[] = [];
+  if (c.regulatoryQuote) {
+    risks.push(
+      `Regulatory blocker: "${c.regulatoryQuote}" — if the rules in your jurisdiction forbid or license this activity, nothing else in the plan matters.`,
+    );
+  }
+  if (c.budgetSeverity === 2) {
+    risks.push(`Budget: "${c.budgetQuote}" leaves no room for paid acquisition, hiring, or a second attempt if the first test fails.`);
+  } else if (c.budgetSeverity === 1) {
+    risks.push(`Budget: "${c.budgetQuote}" covers validation but not a build team, so scope must stay tiny.`);
+  }
+  if (c.soloFounder) {
+    risks.push(`Team: "${c.soloQuote}" means one person carries supply, demand, product, and operations — the first bottleneck is your own time.`);
+  }
+  if (c.singleMarket) {
+    risks.push(`Scope: "${c.singleMarketQuote}" caps how much demand the test can reveal; a good result there does not prove the model travels.`);
+  }
+  return risks;
+}
+
+function buildRisks(s: Signals): string[] {
+  const risks: string[] = [...constraintRisks(s.constraints)];
   if (!s.hasAudience) {
     risks.push("No specific target user is named, so adoption and marketing risks are high.");
   }
@@ -192,7 +400,7 @@ function buildRisks(s: Signals): string[] {
   if (risks.length < 2) {
     risks.push("Building a full product before testing core assumptions directly in the market.");
   }
-  return risks.slice(0, 5);
+  return risks.slice(0, 6);
 }
 
 function buildNextSteps(s: Signals, topic: string): string[] {
