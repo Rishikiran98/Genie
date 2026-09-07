@@ -237,3 +237,41 @@ describe("ideaLabel", () => {
     expect(JSON.stringify(report)).not.toContain(MARKETPLACE.idea);
   });
 });
+
+describe("review regressions", () => {
+  it("does not mistake a running cost for the budget", () => {
+    const c = analyzeConstraints({ idea: MARKETPLACE.idea, constraints: "$200,000 budget; hosting costs $500/month; food regulations" });
+    expect(c.budgetUsd).toBe(200_000);
+    expect(c.budgetSeverity).toBe(0);
+    expect(analyzeConstraints({ idea: MARKETPLACE.idea, constraints: "$2,000, solo founder" }).budgetUsd).toBe(2000);
+    expect(analyzeConstraints({ idea: MARKETPLACE.idea, constraints: "servers cost $300/month" }).budgetUsd).toBeNull();
+  });
+
+  it("does not treat a one-sided integration as a cold-start marketplace", () => {
+    const input: SimulationInput = { idea: "A tool that connects Stripe to QuickBooks and reconciles payouts automatically", targetUser: "Bookkeepers" };
+    expect(bindingConstraint(input).kind).toBe("willingness_to_pay");
+    expect(heuristicSimulation(input).risks.join(" ")).not.toMatch(/cold start/i);
+    const twoSided: SimulationInput = { idea: "An app connecting dog owners with vetted local walkers", targetUser: "Dog owners" };
+    expect(bindingConstraint(twoSided).kind).toBe("cold_start");
+  });
+
+  it("does not treat the legal industry as a regulatory blocker", () => {
+    const input: SimulationInput = { idea: "A document search tool for legal teams that finds precedent clauses across past contracts", targetUser: "Associates at mid-size law firms" };
+    expect(analyzeConstraints(input).regulatoryQuote).toBeNull();
+    expect(bindingConstraint(input).kind).toBe("willingness_to_pay");
+    // An explicit requirement in the idea still counts, and so does the word as a constraint.
+    expect(analyzeConstraints({ idea: "A drone photography service that requires a commercial pilot licence" }).regulatoryQuote).toMatch(/licence/i);
+    expect(analyzeConstraints({ idea: "A tutoring service", constraints: "legal review needed before launch" }).regulatoryQuote).toBe("legal review needed before launch");
+  });
+
+  it("keeps willingness to pay open when the evidence says nobody paid", () => {
+    const failed: SimulationInput = { ...SAAS, evidence: "20 firms tried the demo; none paid the invoice" };
+    expect(bindingConstraint(failed).kind).toBe("willingness_to_pay");
+    const report = heuristicSimulation(failed);
+    const base = heuristicSimulation(SAAS);
+    expect(report.scores.desirability).toBeLessThan(base.scores.desirability);
+    expect(report.scores.confidence).toBeGreaterThan(base.scores.confidence);
+    expect(report.marketDemand).toMatch(/failed test/i);
+    expect(bindingConstraint({ ...SAAS, evidence: "4 firms pre-paid $49 for month one" }).kind).toBe("feasibility");
+  });
+});

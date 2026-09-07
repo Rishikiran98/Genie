@@ -1,0 +1,37 @@
+{
+  "name": "28-integration-not-marketplace",
+  "description": "'Connects X to Y' is an integration, not a two-sided market.",
+  "input": {
+    "idea": "A tool that connects Stripe to QuickBooks and reconciles payouts automatically",
+    "targetUser": "Bookkeepers at agencies",
+    "goal": "50 paying users"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "willingness_to_pay"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.risks",
+      "pattern": "cold start"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.experimentDesign",
+      "pattern": "supply side"
+    },
+    {
+      "type": "notMatches",
+      "field": "plan.dailyPlan[0].focus",
+      "pattern": "supply"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

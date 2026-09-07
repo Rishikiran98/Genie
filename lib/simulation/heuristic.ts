@@ -52,32 +52,36 @@ const DOMAINS: { name: string; keywords: string[]; complexity: number }[] = [
 const PRICING_WORDS = ["$", "subscription", "charge", "pricing", "per month", "/month", "free tier", "freemium"];
 
 /**
- * Regulatory / licensing language. Any of these in the constraints or the idea
- * means an external authority can veto the idea outright, which outranks every
+ * Regulatory / licensing language that is unambiguous wherever it appears:
+ * an external authority can veto the idea outright, which outranks every
  * other risk. Matched case-insensitively as substrings.
  */
 const REGULATORY_WORDS = [
   "regulation",
   "regulatory",
   "regulated",
-  "licence",
-  "license",
-  "licensing",
-  "permit",
   "compliance",
   "compliant",
   "hipaa",
   "fda",
   "gdpr",
+  "coppa",
   "health code",
   "food safety",
   "cottage food",
-  "insurance",
-  "liability",
-  "legal",
   "kyc",
   "aml",
 ];
+
+/**
+ * Words that only signal a blocker when they appear as a *constraint*. In the
+ * idea itself they usually name an industry or a feature ("a search tool for
+ * legal teams", "a software license manager", "insurance brokers").
+ */
+const CONSTRAINT_ONLY_REGULATORY_WORDS = ["licence", "license", "licensing", "permit", "insurance", "liability", "legal"];
+
+/** "requires a licence", "need a permit", "must obtain a license" — explicit even inside the idea. */
+const REQUIRES_LICENCE = /\b(requires?|requiring|need(?:s|ed)?|must (?:have|obtain|get|hold))\s+(?:an?\s+)?(?:[\w-]+\s+){0,2}(licen[cs]e|permit)s?\b/i;
 
 const SOLO_WORDS = [
   "solo founder",
@@ -121,17 +125,21 @@ const COLD_START_WORDS = [
   "two-sided",
   "two sided",
   "buyers and sellers",
-  "sellers",
-  "platform connecting",
-  "connects",
-  "connecting",
+  "peer-to-peer",
+  "peer to peer",
   "network effect",
   "network effects",
   "community of",
   "social network",
-  "matching",
-  "match ",
 ];
+
+/**
+ * "connecting X with Y" / "matches X and Y" — two participant groups named
+ * directly after the verb. A plain integration ("connects Stripe to QuickBooks
+ * and reconciles…") does not match: the phrase is broken by "to" before any
+ * "with" / "and".
+ */
+const TWO_SIDED_PHRASE = /\b(?:connect(?:s|ing)?|match(?:es|ing)?|pair(?:s|ing)?)\s+(?:(?!\bto\b)[\w-]+\s+){1,4}(?:with|and)\s+[\w-]+/i;
 
 /**
  * Comparative language: the only way the input can *state* differentiation.
@@ -185,6 +193,23 @@ const PAIN_WORDS = [
   "no way to",
 ];
 
+/** Payment words in evidence. Only count when the clause is not negated. */
+const PAID_WORDS = /\b(paid|pre-?paid|prepaid|pre-?order(?:s|ed)?|purchas(?:e|ed|es)|bought|revenue|deposit(?:s|ed)?|invoice(?:s|d)?|subscribed|paying)\b|\$\s?[1-9]/i;
+/** A clause that says the test failed. */
+const NEGATION = /\b(none|no one|no-one|nobody|zero|nothing|not|never|didn'?t|did not|wouldn'?t|would not|won'?t|refused|declined|failed|only 0|0 of|0%)\b|\$\s?0\b/i;
+
+/** Classifies each evidence clause: does it report a real payment, and does any clause report a failure? */
+function readEvidence(evidence: string): { paid: boolean; negative: boolean } {
+  let paid = false;
+  let negative = false;
+  for (const clause of clauses(evidence)) {
+    const negated = NEGATION.test(clause);
+    if (negated) negative = true;
+    if (PAID_WORDS.test(clause) && !negated) paid = true;
+  }
+  return { paid, negative };
+}
+
 /**
  * Epistemic ceilings when no evidence is supplied. Without real-world signal
  * (interviews, signups, payments) demand is a hypothesis, however well the
@@ -237,21 +262,48 @@ function quoteClause(text: string, words: string[]): string | null {
   return null;
 }
 
-/** Parses a dollar figure like "$2,000", "$2k", "2k budget", "$1.5m". Returns the smallest one found. */
-function parseBudgetUsd(text: string): number | null {
-  const pattern = /\$\s?(\d[\d,]*(?:\.\d+)?)\s*([km])?\b|\b(\d[\d,]*(?:\.\d+)?)\s*([km])\b(?=[^\n]*budget)/gi;
-  let smallest: number | null = null;
-  for (const m of text.matchAll(pattern)) {
+const BUDGET_WORDS = ["budget", "bootstrapp", "funding", "capital", "to spend", "can spend", "savings", "runway"];
+/** A dollar figure next to these is an expense or a price, not the money available. */
+const EXPENSE_WORDS = ["/month", "per month", "/mo", "a month", "/year", "per year", "cost", "costs", "price", "pricing", "charge", "fee", "salary", "revenue", "mrr", "arr", "per user", "each"];
+
+const MONEY = /\$\s?(\d[\d,]*(?:\.\d+)?)\s*([km])?\b|\b(\d[\d,]*(?:\.\d+)?)\s*([km])\b/gi;
+
+function moneyIn(clause: string): number[] {
+  const values: number[] = [];
+  for (const m of clause.matchAll(MONEY)) {
     const digits = (m[1] ?? m[3] ?? "").replace(/,/g, "");
     const unit = (m[2] ?? m[4] ?? "").toLowerCase();
     if (!digits) continue;
     let value = Number(digits);
     if (unit === "k") value *= 1_000;
     if (unit === "m") value *= 1_000_000;
-    if (!Number.isFinite(value)) continue;
-    smallest = smallest === null ? value : Math.min(smallest, value);
+    if (Number.isFinite(value)) values.push(value);
   }
-  return smallest;
+  return values;
+}
+
+/**
+ * The stated budget in USD. Only figures in a clause that talks about the
+ * budget count ("$2,000 budget", "$15k to spend"); a bare figure with no
+ * other qualifier ("$2,000, solo founder") is taken as the budget too. Figures
+ * attached to an expense or price ("hosting costs $500/month") are ignored,
+ * so a running cost can never be mistaken for the money available. Where
+ * several budget figures appear, the largest is the available budget.
+ */
+function parseBudgetUsd(text: string): number | null {
+  let best: number | null = null;
+  for (const clause of clauses(text)) {
+    const lower = clause.toLowerCase();
+    const values = moneyIn(clause);
+    if (values.length === 0) continue;
+    const isBudget = BUDGET_WORDS.some((w) => lower.includes(w));
+    const isExpense = EXPENSE_WORDS.some((w) => lower.includes(w));
+    if (!isBudget && isExpense) continue;
+    if (!isBudget && !/^\s*\$?\s?[\d,.]+\s*[km]?\s*$/i.test(clause)) continue; // qualified by something else
+    const value = Math.max(...values);
+    best = best === null ? value : Math.max(best, value);
+  }
+  return best;
 }
 
 export function analyzeConstraints(input: SimulationInput): ConstraintSignals {
@@ -273,21 +325,24 @@ export function analyzeConstraints(input: SimulationInput): ConstraintSignals {
 
   // Regulation can be stated as a constraint or be inherent in the idea itself
   // ("a HIPAA-compliant patient app"). Quote the constraints clause when there
-  // is one, else the matching words from the idea.
+  // is one, else the matching words from the idea. Industry adjectives in the
+  // idea ("legal teams") do not count; an explicit "requires a licence" does.
   const regulatoryQuote =
-    quoteClause(raw, REGULATORY_WORDS) ??
+    quoteClause(raw, [...REGULATORY_WORDS, ...CONSTRAINT_ONLY_REGULATORY_WORDS]) ??
     (() => {
       const hit = REGULATORY_WORDS.find((w) => ideaLower.includes(w));
-      if (!hit) return null;
-      const match = input.idea.match(new RegExp(`[\\w-]*${hit.replace(/\s+/g, "\\s+")}[\\w-]*`, "i"));
-      return match?.[0] ?? hit;
+      if (hit) {
+        const match = input.idea.match(new RegExp(`[\\w-]*${hit.replace(/\s+/g, "\\s+")}[\\w-]*`, "i"));
+        return match?.[0] ?? hit;
+      }
+      return input.idea.match(REQUIRES_LICENCE)?.[0] ?? null;
     })();
 
   return {
     raw,
     budgetUsd,
     budgetSeverity,
-    budgetQuote: budgetSeverity > 0 ? (quoteClause(raw, ["$", "budget", "bootstrapp"]) ?? raw) : null,
+    budgetQuote: budgetSeverity > 0 ? (quoteClause(raw, ["budget", "bootstrapp", "funding", "capital", "spend", "$"]) ?? raw) : null,
     soloFounder,
     soloQuote: soloFounder ? quoteClause(raw, SOLO_WORDS) : null,
     singleMarket,
@@ -308,6 +363,10 @@ interface Signals {
   hasEvidence: boolean;
   /** Evidence that contains a number ("10 interviews", "8 signups") — weightier than prose. */
   quantifiedEvidence: boolean;
+  /** Evidence that reports a failed test ("none paid", "no one signed up"). */
+  negativeEvidence: boolean;
+  /** Evidence containing an actual, non-negated payment ("9 pre-paid $15"). */
+  paidEvidence: boolean;
   evidenceText: string;
   /** Two-sided / network-shaped: value needs supply and demand to exist first. */
   coldStart: boolean;
@@ -333,6 +392,7 @@ function analyze(input: SimulationInput): Signals {
   // in the constraints ("$2,000 budget" is not a price).
   const pricingText = `${input.idea} ${input.goal ?? ""} ${input.evidence ?? ""}`.toLowerCase();
   const evidenceText = input.evidence?.trim() || "";
+  const evidenceRead = readEvidence(evidenceText);
   const wordCount = input.idea.trim().split(/\s+/).filter(Boolean).length;
 
   const audienceNouns = [
@@ -363,8 +423,10 @@ function analyze(input: SimulationInput): Signals {
     hasPricing: countHits(pricingText, PRICING_WORDS) > 0,
     hasEvidence: Boolean(evidenceText),
     quantifiedEvidence: /\d/.test(evidenceText),
+    negativeEvidence: evidenceRead.negative,
+    paidEvidence: evidenceRead.paid,
     evidenceText,
-    coldStart: countHits(combinedText, COLD_START_WORDS) > 0,
+    coldStart: countHits(combinedText, COLD_START_WORDS) > 0 || TWO_SIDED_PHRASE.test(input.idea),
     differentiationQuote: quoteClause(`${input.idea}. ${input.goal ?? ""}`, DIFFERENTIATION_WORDS),
     describesPain: countHits(combinedText, PAIN_WORDS) > 0,
     vagueHits: countHits(combinedText, VAGUE_WORDS),
@@ -384,8 +446,9 @@ function scoreDesirability(s: Signals): number {
   if (s.marketHits > 0) score += Math.min(s.marketHits * 2, 5);
   if (s.hasPricing) score += 6;
   if (s.hasGoal) score += 4;
-  // Evidence is the only thing that can lift demand above "promising".
-  if (s.hasEvidence) score += s.quantifiedEvidence ? 17 : 12;
+  // Evidence is the only thing that can lift demand above "promising" — and
+  // evidence that the test failed pushes it down instead.
+  if (s.hasEvidence) score += s.negativeEvidence ? -10 : s.quantifiedEvidence ? 17 : 12;
   // Cold start: a marketplace or network has no value for the first user on
   // either side, so stated demand is discounted until supply is shown to exist.
   if (s.coldStart) score -= 10;
@@ -622,13 +685,12 @@ function regulatoryHint(text: string): string {
   return "the licensing and compliance rules that apply";
 }
 
-const PAID_EVIDENCE = /\b(paid|pre-?paid|pre-?order|purchase|bought|revenue|deposit|invoice)\b|\$\d/i;
 
 function rankConstraints(s: Signals): BindingConstraintKind[] {
   const order: BindingConstraintKind[] = [];
   if (s.constraints.regulatoryQuote) order.push("regulatory");
   if (s.coldStart) order.push("cold_start");
-  if (!(s.hasEvidence && PAID_EVIDENCE.test(s.evidenceText))) order.push("willingness_to_pay");
+  if (!s.paidEvidence) order.push("willingness_to_pay");
   order.push("feasibility");
   return order;
 }
@@ -760,6 +822,9 @@ function describeDifferentiation(s: Signals): string {
 function describeMarketDemand(s: Signals): string {
   if (!s.hasEvidence) {
     return "No demand evidence was supplied. Desirability is inferred from the framing alone and capped accordingly; repeat use and willingness to pay remain assumptions until tested.";
+  }
+  if (s.negativeEvidence) {
+    return `Evidence supplied: "${s.evidenceText}". It reports a failed test, which is the most useful kind — treat the current framing as disproven until something changes.`;
   }
   return `Evidence supplied: "${s.evidenceText}". This is the only demand signal in the input — weight it by how many people it covers and whether money changed hands.`;
 }

@@ -1,0 +1,42 @@
+{
+  "name": "27-budget-with-running-cost",
+  "description": "A running cost next to a comfortable budget must not be read as a shoestring budget.",
+  "input": {
+    "idea": "Marketplace where local home cooks sell fresh homemade meals to nearby busy professionals for pickup or delivery",
+    "targetUser": "Busy professionals who regularly order food",
+    "goal": "Test demand, repeat purchases, and marketplace viability",
+    "constraints": "$200,000 budget; hosting costs $500/month; food regulations",
+    "timeline": "4-week validation sprint"
+  },
+  "assertions": [
+    {
+      "type": "higherThan",
+      "field": "report.scores.feasibility",
+      "variant": {
+        "constraints": "$2,000 budget, solo founder, one neighborhood, food regulations"
+      },
+      "by": 8
+    },
+    {
+      "type": "notMatches",
+      "field": "report.risks",
+      "pattern": "\\$500"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.risks",
+      "pattern": "budget:"
+    },
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "regulatory"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

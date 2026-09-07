@@ -17,7 +17,7 @@ heuristic mode and fails the build on any regression.
 
 ## What it tests
 
-`evals/cases/*.json` holds 26 inputs spanning the reference marketplace case,
+`evals/cases/*.json` holds 30 inputs spanning the reference marketplace case,
 a plainly good B2B SaaS idea, a vague one-liner, a hardware idea, regulated
 health / lending / alcohol / kids ideas, ideas with strong evidence and with
 none, an obviously bad idea, and pairs that isolate one variable (budget

@@ -120,7 +120,7 @@ and PR.
 
 ## Evals
 
-`evals/` holds 26 inputs — the reference home-cook marketplace, a plain
+`evals/` holds 30 inputs — the reference home-cook marketplace, a plain
 B2B SaaS idea, a vague one-liner, hardware, regulated health / lending /
 alcohol / kids ideas, ideas with and without evidence, an obviously bad
 idea — each with assertions on **bands and properties, never exact strings**:

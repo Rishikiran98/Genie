@@ -1,0 +1,55 @@
+{
+  "name": "30-negative-payment-evidence",
+  "description": "Evidence that nobody paid keeps willingness to pay open and lowers demand while raising confidence.",
+  "input": {
+    "idea": "A B2B SaaS dashboard that helps small accounting firms track client document requests and deadlines in one place",
+    "targetUser": "Owners of 5-20 person accounting firms",
+    "goal": "Get 10 paying firms at $49/month",
+    "timeline": "6 weeks",
+    "evidence": "20 firms tried the demo; none paid the invoice"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "willingness_to_pay"
+    },
+    {
+      "type": "lowerThan",
+      "field": "report.scores.desirability",
+      "variant": {
+        "evidence": null
+      },
+      "by": 5
+    },
+    {
+      "type": "higherThan",
+      "field": "report.scores.confidence",
+      "variant": {
+        "evidence": null
+      },
+      "by": 5
+    },
+    {
+      "type": "matches",
+      "field": "report.marketDemand",
+      "pattern": "failed test"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.recommendation",
+      "pattern": "supports moving|proceed"
+    },
+    {
+      "type": "notMatches",
+      "field": "plan.dailyPlan[0].focus",
+      "pattern": "hardest component"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}
