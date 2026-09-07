@@ -1,0 +1,66 @@
+{
+  "name": "02-reference-with-evidence",
+  "description": "Same idea with quantified paid evidence: both demand scores must rise above the no-evidence ceilings.",
+  "input": {
+    "idea": "Marketplace where local home cooks sell fresh homemade meals to nearby busy professionals for pickup or delivery",
+    "targetUser": "Busy professionals who regularly order food",
+    "goal": "Test demand, repeat purchases, and marketplace viability",
+    "constraints": "$2,000 budget, solo founder, one neighborhood, food regulations",
+    "timeline": "4-week validation sprint",
+    "evidence": "Interviewed 12 professionals in the neighborhood; 9 pre-paid $15 for a first meal and 6 cooks signed up."
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.desirability",
+      "min": 71
+    },
+    {
+      "type": "band",
+      "field": "report.scores.confidence",
+      "min": 56
+    },
+    {
+      "type": "higherThan",
+      "field": "report.scores.desirability",
+      "variant": {
+        "evidence": null
+      },
+      "by": 5
+    },
+    {
+      "type": "higherThan",
+      "field": "report.scores.confidence",
+      "variant": {
+        "evidence": null
+      },
+      "by": 10
+    },
+    {
+      "type": "matches",
+      "field": "report.marketDemand",
+      "pattern": "pre-paid"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.marketDemand",
+      "pattern": "^validated"
+    },
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "regulatory"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "legal|jurisdiction"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

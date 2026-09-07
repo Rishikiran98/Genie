@@ -1,0 +1,50 @@
+{
+  "name": "12-obviously-bad",
+  "description": "Generic social network for everyone: cold start, vague, no differentiation, low demand.",
+  "input": {
+    "idea": "A social network for everyone to share stuff and things, kind of like a new Facebook but for all people"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.desirability",
+      "max": 40
+    },
+    {
+      "type": "band",
+      "field": "report.scores.confidence",
+      "max": 40
+    },
+    {
+      "type": "band",
+      "field": "report.scores.differentiation",
+      "max": 50
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "cold start"
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "ambiguous|vague"
+    },
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "cold_start"
+    },
+    {
+      "type": "matches",
+      "field": "report.differentiation",
+      "pattern": "no differentiation"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

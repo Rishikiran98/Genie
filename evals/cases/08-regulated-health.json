@@ -1,0 +1,56 @@
+{
+  "name": "08-regulated-health",
+  "description": "Regulation inherent in the idea (HIPAA) binds even with an empty constraints field.",
+  "input": {
+    "idea": "A HIPAA-compliant app that lets patients share their medical records with a new doctor in one tap",
+    "targetUser": "Patients switching doctors",
+    "goal": "100 record transfers"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "regulatory"
+    },
+    {
+      "type": "firstMatch",
+      "field": "report.risks",
+      "pattern": "regulat",
+      "index": 0
+    },
+    {
+      "type": "matches",
+      "field": "report.risks[0]",
+      "pattern": "hipaa"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "legal|jurisdiction"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "hipaa|health"
+    },
+    {
+      "type": "matches",
+      "field": "plan.dailyPlan[0].focus",
+      "pattern": "legal"
+    },
+    {
+      "type": "lowerThan",
+      "field": "report.scores.executionRisk",
+      "variant": {
+        "idea": "An app that lets people share their reading lists with a new friend in one tap"
+      },
+      "by": 8
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

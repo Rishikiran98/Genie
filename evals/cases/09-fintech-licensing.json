@@ -1,0 +1,42 @@
+{
+  "name": "09-fintech-licensing",
+  "description": "Lending with a licensing constraint: regulatory first, financial-services hint.",
+  "input": {
+    "idea": "A lending app that advances gig workers up to $300 against next week's earnings",
+    "targetUser": "Rideshare and delivery drivers",
+    "constraints": "lending licence required in most states, $10k budget"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "regulatory"
+    },
+    {
+      "type": "matches",
+      "field": "report.risks[0]",
+      "pattern": "licence"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "financial|kyc|licens"
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "\\$10k"
+    },
+    {
+      "type": "band",
+      "field": "report.scores.feasibility",
+      "max": 50
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

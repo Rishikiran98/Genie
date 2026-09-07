@@ -1,0 +1,49 @@
+{
+  "name": "05-saas-paid-evidence",
+  "description": "SaaS with paid evidence: feasibility becomes the open question and the build is justified.",
+  "input": {
+    "idea": "A B2B SaaS dashboard that helps small accounting firms track client document requests and deadlines in one place",
+    "targetUser": "Owners of 5-20 person accounting firms",
+    "goal": "Get 10 paying firms at $49/month",
+    "timeline": "6 weeks",
+    "evidence": "4 firms pre-paid $49 for month one after a 20-minute demo"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "feasibility"
+    },
+    {
+      "type": "band",
+      "field": "report.scores.desirability",
+      "min": 71
+    },
+    {
+      "type": "band",
+      "field": "report.scores.confidence",
+      "min": 60
+    },
+    {
+      "type": "matches",
+      "field": "report.recommendation",
+      "pattern": "evidence"
+    },
+    {
+      "type": "matches",
+      "field": "report.marketDemand",
+      "pattern": "pre-paid"
+    },
+    {
+      "type": "matches",
+      "field": "plan.dailyPlan[0].focus",
+      "pattern": "hardest component"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

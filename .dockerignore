@@ -10,6 +10,7 @@ coverage
 .env*.local
 .DS_Store
 docs
+evals
 README.md
 LICENSE
 supabase/verify_rls.sh

@@ -1,0 +1,84 @@
+{
+  "name": "04-saas-plain",
+  "description": "A plainly good B2B SaaS idea with no evidence: demand-first path, sane scores, no legal talk.",
+  "input": {
+    "idea": "A B2B SaaS dashboard that helps small accounting firms track client document requests and deadlines in one place",
+    "targetUser": "Owners of 5-20 person accounting firms",
+    "goal": "Get 10 paying firms at $49/month",
+    "timeline": "6 weeks"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.desirability",
+      "min": 55,
+      "max": 70
+    },
+    {
+      "type": "band",
+      "field": "report.scores.feasibility",
+      "min": 55
+    },
+    {
+      "type": "band",
+      "field": "report.scores.executionRisk",
+      "min": 50
+    },
+    {
+      "type": "band",
+      "field": "report.scores.confidence",
+      "max": 55
+    },
+    {
+      "type": "band",
+      "field": "report.scores.differentiation",
+      "max": 50
+    },
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "willingness_to_pay"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "deposit|pre-order|pay"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.experimentDesign",
+      "pattern": "legal|jurisdiction"
+    },
+    {
+      "type": "matches",
+      "field": "plan.dailyPlan[0].focus",
+      "pattern": "sharpen the problem"
+    },
+    {
+      "type": "notMatches",
+      "field": "plan.dailyPlan[0].tasks",
+      "pattern": "legal"
+    },
+    {
+      "type": "matches",
+      "field": "report.problemClarity",
+      "pattern": "names who it is for"
+    },
+    {
+      "type": "matches",
+      "field": "report.differentiation",
+      "pattern": "no differentiation"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.risks",
+      "pattern": "regulat"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

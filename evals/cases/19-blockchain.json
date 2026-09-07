@@ -1,0 +1,26 @@
+{
+  "name": "19-blockchain",
+  "description": "Blockchain complexity depresses feasibility.",
+  "input": {
+    "idea": "A blockchain token that rewards people for recycling verified by smart contracts",
+    "targetUser": "Urban households"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.feasibility",
+      "max": 50
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "blockchain"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

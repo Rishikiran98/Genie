@@ -1,0 +1,162 @@
+{
+  "name": "01-reference-marketplace",
+  "description": "The reference failure: regulated, two-sided, cold-start, solo, $2k, no evidence.",
+  "input": {
+    "idea": "Marketplace where local home cooks sell fresh homemade meals to nearby busy professionals for pickup or delivery",
+    "targetUser": "Busy professionals who regularly order food",
+    "goal": "Test demand, repeat purchases, and marketplace viability",
+    "constraints": "$2,000 budget, solo founder, one neighborhood, food regulations",
+    "timeline": "4-week validation sprint"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.desirability",
+      "min": 55,
+      "max": 70
+    },
+    {
+      "type": "band",
+      "field": "report.scores.confidence",
+      "max": 55
+    },
+    {
+      "type": "band",
+      "field": "report.scores.feasibility",
+      "max": 45
+    },
+    {
+      "type": "band",
+      "field": "report.scores.executionRisk",
+      "max": 40
+    },
+    {
+      "type": "band",
+      "field": "report.scores.differentiation",
+      "max": 50
+    },
+    {
+      "type": "lowerThan",
+      "field": "report.scores.feasibility",
+      "variant": {
+        "constraints": null
+      },
+      "by": 15
+    },
+    {
+      "type": "lowerThan",
+      "field": "report.scores.executionRisk",
+      "variant": {
+        "constraints": null
+      },
+      "by": 15
+    },
+    {
+      "type": "firstMatch",
+      "field": "report.risks",
+      "pattern": "regulat",
+      "index": 0
+    },
+    {
+      "type": "matches",
+      "field": "report.risks[0]",
+      "pattern": "food regulations"
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "\\$2,000"
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "solo founder"
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "one neighborhood"
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "cold start"
+    },
+    {
+      "type": "matches",
+      "field": "report.differentiation",
+      "pattern": "no differentiation .* was stated"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.differentiation",
+      "pattern": "clear differentiation"
+    },
+    {
+      "type": "matches",
+      "field": "report.marketDemand",
+      "pattern": "no demand evidence"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.marketDemand",
+      "pattern": "validated"
+    },
+    {
+      "type": "matches",
+      "field": "report.recommendation",
+      "pattern": "do not build|validate before"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.recommendation",
+      "pattern": "proceed with building|high signal"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "legal|jurisdiction"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.experimentDesign",
+      "pattern": "landing page"
+    },
+    {
+      "type": "matches",
+      "field": "report.weakAssumption",
+      "pattern": "food regulations"
+    },
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "regulatory"
+    },
+    {
+      "type": "matches",
+      "field": "plan.dailyPlan[0].focus",
+      "pattern": "legal"
+    },
+    {
+      "type": "matches",
+      "field": "plan.dailyPlan[0].tasks",
+      "pattern": "food regulations"
+    },
+    {
+      "type": "matches",
+      "field": "report.nextSteps[0]",
+      "pattern": "legal"
+    },
+    {
+      "type": "matches",
+      "field": "report.summary",
+      "pattern": "no evidence"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

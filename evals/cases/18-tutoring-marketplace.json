@@ -1,0 +1,45 @@
+{
+  "name": "18-tutoring-marketplace",
+  "description": "Unregulated two-sided idea: supply side first, cold-start risk, demand discounted.",
+  "input": {
+    "idea": "A marketplace where retired teachers sell one-off tutoring sessions to parents of struggling high-schoolers",
+    "targetUser": "Parents of high-schoolers",
+    "goal": "50 paid sessions"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "cold_start"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "supply"
+    },
+    {
+      "type": "matches",
+      "field": "plan.dailyPlan[0].tasks",
+      "pattern": "providers"
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "cold start"
+    },
+    {
+      "type": "lowerThan",
+      "field": "report.scores.desirability",
+      "variant": {
+        "idea": "A service where our retired teachers give one-off tutoring sessions to parents of struggling high-schoolers"
+      },
+      "by": 5
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

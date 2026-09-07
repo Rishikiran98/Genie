@@ -1,0 +1,32 @@
+{
+  "name": "14-differentiation-absent-long-idea",
+  "description": "A long, detailed idea with no contrast must not be credited with differentiation.",
+  "input": {
+    "idea": "A mobile app for busy parents that plans weekly dinners, builds the grocery list automatically, tracks what is already in the pantry, suggests recipes based on what is about to expire, and syncs across the family",
+    "targetUser": "Parents of school-age kids",
+    "goal": "10k downloads"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.differentiation",
+      "max": 50
+    },
+    {
+      "type": "matches",
+      "field": "report.differentiation",
+      "pattern": "no differentiation"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.differentiation",
+      "pattern": "clear"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

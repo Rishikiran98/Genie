@@ -1,0 +1,53 @@
+{
+  "name": "03-reference-unregulated",
+  "description": "Reference idea without the regulatory clause: supply-side cold start binds next.",
+  "input": {
+    "idea": "Marketplace where local home cooks sell fresh homemade meals to nearby busy professionals for pickup or delivery",
+    "targetUser": "Busy professionals who regularly order food",
+    "goal": "Test demand, repeat purchases, and marketplace viability",
+    "constraints": "$2,000 budget, solo founder, one neighborhood",
+    "timeline": "4-week validation sprint"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "cold_start"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "supply"
+    },
+    {
+      "type": "matches",
+      "field": "plan.dailyPlan[0].focus",
+      "pattern": "supply"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.experimentDesign",
+      "pattern": "legal|jurisdiction"
+    },
+    {
+      "type": "firstMatch",
+      "field": "report.risks",
+      "pattern": "\\$2,000",
+      "index": 0
+    },
+    {
+      "type": "higherThan",
+      "field": "report.scores.feasibility",
+      "variant": {
+        "constraints": "$2,000 budget, solo founder, one neighborhood, food regulations"
+      },
+      "by": 5
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

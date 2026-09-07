@@ -1,0 +1,31 @@
+{
+  "name": "22-timeline-present",
+  "description": "A stated timeline raises feasibility slightly and removes the scope-bloat risk (idea text itself has no time words).",
+  "input": {
+    "idea": "A B2B SaaS dashboard that helps small accounting firms track client document requests and deadlines in one place",
+    "targetUser": "Owners of 5-20 person accounting firms",
+    "goal": "Get 10 paying firms at $49/month",
+    "timeline": "6 weeks"
+  },
+  "assertions": [
+    {
+      "type": "higherThan",
+      "field": "report.scores.feasibility",
+      "variant": {
+        "timeline": null
+      },
+      "by": 1
+    },
+    {
+      "type": "notMatches",
+      "field": "report.risks",
+      "pattern": "no target timeline"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

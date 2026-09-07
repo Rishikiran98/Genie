@@ -1,0 +1,46 @@
+{
+  "name": "13-differentiation-stated",
+  "description": "An explicit contrast earns a differentiation claim, framed as a hypothesis.",
+  "input": {
+    "idea": "Unlike existing practice-management suites, a single-purpose tracker for client document requests that accountants can set up in ten minutes",
+    "targetUser": "Owners of 5-20 person accounting firms",
+    "goal": "Get 10 paying firms at $49/month",
+    "timeline": "6 weeks"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.differentiation",
+      "min": 60
+    },
+    {
+      "type": "matches",
+      "field": "report.differentiation",
+      "pattern": "stated differentiation"
+    },
+    {
+      "type": "matches",
+      "field": "report.differentiation",
+      "pattern": "unlike existing practice-management suites"
+    },
+    {
+      "type": "matches",
+      "field": "report.differentiation",
+      "pattern": "hypothesis"
+    },
+    {
+      "type": "higherThan",
+      "field": "report.scores.differentiation",
+      "variant": {
+        "idea": "A B2B SaaS dashboard that helps small accounting firms track client document requests and deadlines in one place"
+      },
+      "by": 10
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}
