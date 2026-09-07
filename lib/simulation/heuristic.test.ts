@@ -88,3 +88,60 @@ describe("constraints cost something", () => {
     expect(mild.scores.confidence).toBeGreaterThanOrEqual(base.scores.confidence);
   });
 });
+
+describe("desirability measures evidence, not vocabulary", () => {
+  it("lands the reference input in a defensible band without evidence", () => {
+    const { scores } = heuristicSimulation(MARKETPLACE);
+    expect(scores.desirability).toBeGreaterThanOrEqual(55);
+    expect(scores.desirability).toBeLessThanOrEqual(70);
+    expect(scores.confidence).toBeLessThanOrEqual(55);
+  });
+
+  it("caps desirability and confidence whenever no evidence is supplied", () => {
+    // Every commercial word and every optional field filled in, still no evidence.
+    const loaded = heuristicSimulation({
+      idea: "A subscription SaaS for paying customers with clear market demand, revenue and growth, priced at $49 per month",
+      targetUser: "Marketing teams at mid-size companies",
+      goal: "Reach $10k MRR",
+      constraints: "6 weeks",
+      timeline: "6 weeks",
+    });
+    expect(loaded.scores.desirability).toBeLessThanOrEqual(70);
+    expect(loaded.scores.confidence).toBeLessThanOrEqual(55);
+  });
+
+  it("raises both desirability and confidence when evidence is added", () => {
+    const base = heuristicSimulation(MARKETPLACE);
+    const withEvidence = heuristicSimulation({
+      ...MARKETPLACE,
+      evidence: "Interviewed 12 professionals in the neighborhood; 9 pre-paid $15 for a first meal and 6 cooks signed up.",
+    });
+    expect(withEvidence.scores.desirability).toBeGreaterThan(base.scores.desirability);
+    expect(withEvidence.scores.confidence).toBeGreaterThan(base.scores.confidence);
+    // Evidence is what unlocks scores above the ceilings.
+    expect(withEvidence.scores.desirability).toBeGreaterThan(70);
+    expect(withEvidence.scores.confidence).toBeGreaterThan(55);
+  });
+
+  it("does not let commerce nouns move desirability by more than a few points", () => {
+    const plain = heuristicSimulation({ ...SAAS, idea: "A dashboard that helps small accounting firms track client document requests and deadlines" });
+    const wordy = heuristicSimulation({
+      ...SAAS,
+      idea: "A dashboard that helps small accounting firms (our customers) track client document requests — a market with demand, revenue and growth we can sell into",
+    });
+    expect(wordy.scores.desirability - plain.scores.desirability).toBeLessThanOrEqual(5);
+  });
+
+  it("applies a cold-start penalty to two-sided ideas", () => {
+    const oneSided = heuristicSimulation({ idea: "An app where busy professionals order fresh homemade meals from our kitchen", targetUser: "Busy professionals" });
+    const twoSided = heuristicSimulation({ idea: "A marketplace where home cooks sell fresh homemade meals to busy professionals", targetUser: "Busy professionals" });
+    expect(twoSided.scores.desirability).toBeLessThan(oneSided.scores.desirability);
+    expect(twoSided.risks.join(" ")).toMatch(/cold start/i);
+  });
+
+  it("does not treat a budget figure in the constraints as pricing", () => {
+    const withBudget = heuristicSimulation({ ...SAAS, goal: "Get 10 firms using it", constraints: "$2,000 budget" });
+    const without = heuristicSimulation({ ...SAAS, goal: "Get 10 firms using it" });
+    expect(withBudget.scores.desirability).toBeLessThanOrEqual(without.scores.desirability);
+  });
+});

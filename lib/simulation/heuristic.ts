@@ -112,6 +112,38 @@ const SINGLE_MARKET_WORDS = [
   "only locally",
 ];
 
+/**
+ * Structural demand problems: both sides of a market (or a critical mass of
+ * members) must exist before anyone gets value. These words flag that shape.
+ */
+const COLD_START_WORDS = [
+  "marketplace",
+  "two-sided",
+  "two sided",
+  "buyers and sellers",
+  "sellers",
+  "platform connecting",
+  "connects",
+  "connecting",
+  "network effect",
+  "network effects",
+  "community of",
+  "social network",
+  "matching",
+  "match ",
+];
+
+/**
+ * Epistemic ceilings when no evidence is supplied. Without real-world signal
+ * (interviews, signups, payments) demand is a hypothesis, however well the
+ * idea is written, so desirability is capped at "promising" and confidence at
+ * "coin-flip plus". This is a deliberate choice about what a score can
+ * honestly mean, not a tuning constant: lift it only if the input gains a
+ * field that carries real evidence.
+ */
+const NO_EVIDENCE_DESIRABILITY_CEILING = 70;
+const NO_EVIDENCE_CONFIDENCE_CEILING = 55;
+
 /** Budget thresholds, USD. Below `SHOESTRING` there is no room for paid acquisition or hiring at all. */
 const BUDGET_SHOESTRING_USD = 5_000;
 /** Below `TIGHT` you can buy some validation but not a build team. */
@@ -222,7 +254,11 @@ interface Signals {
   hasTimeline: boolean;
   hasPricing: boolean;
   hasEvidence: boolean;
+  /** Evidence that contains a number ("10 interviews", "8 signups") — weightier than prose. */
+  quantifiedEvidence: boolean;
   evidenceText: string;
+  /** Two-sided / network-shaped: value needs supply and demand to exist first. */
+  coldStart: boolean;
   vagueHits: number;
   marketHits: number;
   mvpHits: number;
@@ -237,6 +273,10 @@ function countHits(text: string, words: string[]): number {
 function analyze(input: SimulationInput): Signals {
   const targetUser = input.targetUser || input.audience || "";
   const combinedText = `${input.idea} ${targetUser} ${input.goal ?? ""} ${input.constraints ?? ""} ${input.timeline ?? ""} ${input.evidence ?? ""}`.toLowerCase();
+  // Pricing signals come from what the idea charges, not from a budget line
+  // in the constraints ("$2,000 budget" is not a price).
+  const pricingText = `${input.idea} ${input.goal ?? ""} ${input.evidence ?? ""}`.toLowerCase();
+  const evidenceText = input.evidence?.trim() || "";
   const wordCount = input.idea.trim().split(/\s+/).filter(Boolean).length;
 
   const audienceNouns = [
@@ -264,9 +304,11 @@ function analyze(input: SimulationInput): Signals {
     hasConstraints: Boolean(input.constraints?.trim()),
     constraints: analyzeConstraints(input),
     hasTimeline: Boolean(input.timeline?.trim()) || countHits(combinedText, timelineMarkers) > 0,
-    hasPricing: countHits(combinedText, PRICING_WORDS) > 0,
-    hasEvidence: Boolean(input.evidence?.trim()),
-    evidenceText: input.evidence?.trim() || "",
+    hasPricing: countHits(pricingText, PRICING_WORDS) > 0,
+    hasEvidence: Boolean(evidenceText),
+    quantifiedEvidence: /\d/.test(evidenceText),
+    evidenceText,
+    coldStart: countHits(combinedText, COLD_START_WORDS) > 0,
     vagueHits: countHits(combinedText, VAGUE_WORDS),
     marketHits: countHits(combinedText, MARKET_WORDS),
     mvpHits: countHits(combinedText, MVP_WORDS),
@@ -276,13 +318,21 @@ function analyze(input: SimulationInput): Signals {
 }
 
 function scoreDesirability(s: Signals): number {
-  let score = 52;
-  if (s.hasAudience) score += 12;
-  if (s.marketHits > 0) score += Math.min(s.marketHits * 5, 15);
-  if (s.hasPricing) score += 8;
-  if (s.hasGoal) score += 6;
-  if (s.hasEvidence) score += 12;
+  let score = 50;
+  if (s.hasAudience) score += 10;
+  // Commerce vocabulary ("customers", "revenue", "sell") is a weak signal that
+  // the author is thinking commercially — not evidence that anyone wants this.
+  // Capped low so wording alone cannot move the score much.
+  if (s.marketHits > 0) score += Math.min(s.marketHits * 2, 5);
+  if (s.hasPricing) score += 6;
+  if (s.hasGoal) score += 4;
+  // Evidence is the only thing that can lift demand above "promising".
+  if (s.hasEvidence) score += s.quantifiedEvidence ? 17 : 12;
+  // Cold start: a marketplace or network has no value for the first user on
+  // either side, so stated demand is discounted until supply is shown to exist.
+  if (s.coldStart) score -= 10;
   score -= s.vagueHits * 8;
+  if (!s.hasEvidence) score = Math.min(score, NO_EVIDENCE_DESIRABILITY_CEILING);
   return clamp(score);
 }
 
@@ -338,14 +388,16 @@ function scoreExecutionRisk(s: Signals): number {
 }
 
 function scoreConfidence(s: Signals): number {
-  let score = 55;
-  if (s.hasAudience) score += 10;
-  if (s.hasTimeline) score += 5;
+  let score = 40;
+  if (s.hasAudience) score += 8;
+  if (s.hasGoal) score += 4;
+  if (s.hasTimeline) score += 3;
   // Naming constraints at all is mild evidence the author has thought it
   // through — worth a little confidence, never feasibility.
   if (s.hasConstraints) score += 4;
-  if (s.hasEvidence) score += 20;
+  if (s.hasEvidence) score += s.quantifiedEvidence ? 25 : 18;
   if (s.vagueHits > 0) score -= 10;
+  if (!s.hasEvidence) score = Math.min(score, NO_EVIDENCE_CONFIDENCE_CEILING);
   return clamp(score);
 }
 
@@ -391,7 +443,10 @@ function buildRisks(s: Signals): string[] {
       risks.push(`${d.name} architecture carries high execution friction and implementation costs.`);
     }
   }
-  if (!s.hasPricing && s.marketHits === 0) {
+  if (s.coldStart) {
+    risks.push("Cold start: neither side of the market gets value until the other shows up, so early supply has to be recruited by hand.");
+  }
+  if (!s.hasPricing) {
     risks.push("Willingness to pay is unverified; potential users may love the concept but refuse to pay.");
   }
   if (!s.hasTimeline) {
