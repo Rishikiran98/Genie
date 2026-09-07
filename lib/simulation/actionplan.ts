@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { bindingConstraint, heuristicSimulation, shortTopic } from "./heuristic";
+import { bindingConstraint, heuristicSimulation, ideaLabel } from "./heuristic";
 import { chatJson, readLlmConfig, type LlmConfig } from "./provider";
 import {
   simulationInputSchema,
@@ -55,7 +55,7 @@ export interface ActionPlanResult {
 // ---------------------------------------------------------------------------
 
 export function heuristicActionPlan(input: SimulationInput, base: SimulationReport): ActionPlan {
-  const topic = shortTopic(input.idea);
+  const label = ideaLabel(input.idea);
   const user = input.targetUser || input.audience;
   const hasTimeline = Boolean(input.timeline?.trim());
   const lowFeasibility = base.scores.feasibility < 55;
@@ -167,8 +167,8 @@ export function heuristicActionPlan(input: SimulationInput, base: SimulationRepo
   ];
 
   const overview = hasTimeline
-    ? `A validation-first sprint for "${topic}" framed against your timeline (${input.timeline!.trim()}). Week one collects real-world data before building.`
-    : `A validation-first 30-day roadmap for "${topic}". Week one collects real-world data before building.`;
+    ? `A validation-first sprint for ${label}, framed against your timeline (${input.timeline!.trim()}). Week one collects real-world data before building.`
+    : `A validation-first 30-day roadmap for ${label}. Week one collects real-world data before building.`;
 
   return { overview, dailyPlan, roadmap, buildChecklist, validationChecklist };
 }

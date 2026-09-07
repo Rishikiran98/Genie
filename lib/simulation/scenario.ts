@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { heuristicSimulation, shortTopic } from "./heuristic";
+import { heuristicSimulation, ideaLabel } from "./heuristic";
 import { chatJson, readLlmConfig, type LlmConfig } from "./provider";
 import {
   scoreSchema,
@@ -103,20 +103,20 @@ function applyDeltas(base: Scores, delta: Scores): Scores {
   };
 }
 
-function narrativeFor(type: ScenarioType, topic: string, base: SimulationReport): string {
+function narrativeFor(type: ScenarioType, label: string, base: SimulationReport): string {
   switch (type) {
     case "optimistic":
-      return `In the best case, "${topic}" finds its audience fast: a focused MVP nails the core job, early users become advocates, and momentum compounds. ${base.recommendation}`;
+      return `In the best case, ${label} finds its audience fast: a focused MVP nails the core job, early users become advocates, and momentum compounds. Even then, the first move is unchanged: ${base.experimentDesign}`;
     case "realistic":
-      return `Most likely, "${topic}" lands in the middle — adoption requires active distribution effort, with iterative pivots on positioning as feedback comes in.`;
+      return `Most likely, ${label} lands in the middle — adoption requires active distribution effort, with iterative pivots on positioning as feedback comes in.`;
     case "pessimistic":
-      return `In the worst case, "${topic}" fails to gain traction: ${base.risks[0]} You spend months building only to face user indifference.`;
+      return `In the worst case, ${label} fails before it gets a fair test: ${base.risks[0]} You spend months building only to face user indifference.`;
     case "low_budget":
-      return `On a shoestring budget, you skip expensive infrastructure and run a manual test: ${base.experimentDesign} Cash risk is minimal.`;
+      return `On a shoestring budget, you skip expensive infrastructure and run a manual test. ${base.experimentDesign} Cash risk is minimal.`;
     case "fast":
-      return `On the fastest path, you cut scope to the absolute bone and ship "${topic}" in days to get immediate user signal.`;
+      return `On the fastest path, you cut scope to the absolute bone and ship ${label} in days to get immediate user signal.`;
     case "long_term":
-      return `Playing the long game, "${topic}" scales through retention and word-of-mouth as user trust compounds over time.`;
+      return `Playing the long game, ${label} scales through retention and word-of-mouth as user trust compounds over time.`;
   }
 }
 
@@ -199,11 +199,11 @@ export function heuristicScenario(
   base: SimulationReport,
   type: ScenarioType,
 ): ScenarioReport {
-  const topic = shortTopic(input.idea);
+  const label = ideaLabel(input.idea);
   return {
     scenarioType: type,
     label: SCENARIOS[type].label,
-    narrative: narrativeFor(type, topic, base),
+    narrative: narrativeFor(type, label, base),
     scores: applyDeltas(base.scores, DELTAS[type]),
     keyFactors: factorsFor(type, base),
     moves: movesFor(type, base),

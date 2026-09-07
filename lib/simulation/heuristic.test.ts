@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeConstraints, bindingConstraint, heuristicSimulation } from "./heuristic";
+import { analyzeConstraints, bindingConstraint, heuristicSimulation, ideaLabel } from "./heuristic";
 import type { SimulationInput } from "./schema";
 
 /**
@@ -218,5 +218,22 @@ describe("the binding constraint leads", () => {
 
   it("moves to feasibility once paid evidence exists", () => {
     expect(bindingConstraint({ ...SAAS, evidence: "4 firms pre-paid $49 for month one" }).kind).toBe("feasibility");
+  });
+});
+
+describe("ideaLabel", () => {
+  it("produces a short noun phrase and never a truncated splice", () => {
+    expect(ideaLabel(MARKETPLACE.idea)).toBe("the marketplace for local home cooks");
+    expect(ideaLabel("An AI agent that helps people prepare for job interviews with mock questions.")).toBe("the AI agent");
+    expect(ideaLabel("A newsletter that summarizes one research paper a day for software engineers.")).toBe("the newsletter");
+    expect(ideaLabel(SAAS.idea)).toBe("the B2B SaaS dashboard");
+    expect(ideaLabel("A hardware IoT sensor device for smart farming on real farms.")).toBe("the hardware IoT sensor device");
+    expect(ideaLabel("I want to build something cool, maybe an app of some kind.")).toBe("the idea");
+  });
+
+  it("keeps every generated field free of the truncation ellipsis", () => {
+    const report = heuristicSimulation(MARKETPLACE);
+    expect(JSON.stringify(report)).not.toContain("…");
+    expect(JSON.stringify(report)).not.toContain(MARKETPLACE.idea);
   });
 });

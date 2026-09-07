@@ -464,11 +464,57 @@ function scoreConfidence(s: Signals): number {
   return clamp(score);
 }
 
-export function shortTopic(idea: string): string {
-  const trimmed = idea.trim().replace(/\s+/g, " ");
-  const words = trimmed.split(" ");
-  if (words.length <= 14) return trimmed.replace(/[.?!]+$/, "");
-  return words.slice(0, 14).join(" ") + "…";
+// ---------------------------------------------------------------------------
+// Idea label
+// ---------------------------------------------------------------------------
+
+const LEAD_INS =
+  /^(i want to|i'd like to|i would like to|we want to|we'd like to|i plan to|we plan to|i am building|i'm building|we are building|we're building|building|build|create|creating|make|making|launch|launching|develop|developing|start|starting|an idea for|idea:|idea for|my idea is)\s+/i;
+const ARTICLES = /^(a|an|the)\s+/i;
+/** Where the head noun phrase of an idea usually ends. */
+const CONNECTIVES =
+  /\s+(where|that|which|who|whose|so|because|by|using|via|connecting|helping|helps|lets|letting|enabling|allowing|allows|to help|to let)\s+|[,;:—–]|\s-\s/i;
+/** Words that end a subject noun phrase after "where" / "connecting". */
+const SUBJECT_STOPS = new Set(["sell", "sells", "buy", "buys", "can", "who", "that", "get", "offer", "to", "and", "with", "share", "post", "find"]);
+const TRAILING_STOPS = new Set(["for", "to", "of", "with", "and", "on", "in", "at", "from", "or"]);
+const DEGENERATE_HEADS = new Set(["i", "we", "you", "it", "something", "someone", "anything", "my", "our", "this", "there"]);
+const LABEL_MAX_WORDS = 5;
+
+/**
+ * A short noun-phrase label for the idea, generated once per report so prose
+ * can say "the home-cook marketplace" instead of splicing the user's full text
+ * (with an ellipsis) into every sentence. Falls back to "the idea" when the
+ * input has no usable head noun. Deterministic.
+ */
+export function ideaLabel(idea: string): string {
+  let text = idea.trim().replace(/\s+/g, " ").replace(/[.?!]+$/, "");
+  for (let i = 0; i < 3 && LEAD_INS.test(text); i++) text = text.replace(LEAD_INS, "");
+  text = text.replace(ARTICLES, "");
+
+  const match = CONNECTIVES.exec(text);
+  let head = match ? text.slice(0, match.index) : text;
+  let words = head.split(" ").filter(Boolean);
+
+  // "Marketplace where local home cooks sell…" → "marketplace for local home cooks"
+  const connective = match?.[1]?.toLowerCase();
+  if (words.length === 1 && match && (connective === "where" || connective === "connecting")) {
+    const subject: string[] = [];
+    for (const w of text.slice(match.index + match[0].length).split(" ")) {
+      if (SUBJECT_STOPS.has(w.toLowerCase()) || subject.length === 3) break;
+      subject.push(w);
+    }
+    if (subject.length > 0) words = [...words, "for", ...subject];
+  }
+
+  words = words.slice(0, LABEL_MAX_WORDS);
+  while (words.length > 0 && TRAILING_STOPS.has(words[words.length - 1].toLowerCase())) words.pop();
+  if (words.length === 0 || DEGENERATE_HEADS.has(words[0].toLowerCase())) return "the idea";
+
+  const first = words[0];
+  const isAcronym = first.length > 1 && first === first.toUpperCase();
+  words[0] = isAcronym ? first : first[0].toLowerCase() + first.slice(1);
+  head = words.join(" ");
+  return `the ${head}`;
 }
 
 /** One risk line per detected constraint, quoting the user's own words. Regulatory first. */
@@ -521,7 +567,7 @@ function buildRisks(s: Signals): string[] {
   return risks.slice(0, 6);
 }
 
-function buildNextSteps(s: Signals, topic: string, binding: BindingConstraint): string[] {
+function buildNextSteps(s: Signals, label: string, binding: BindingConstraint): string[] {
   const steps: string[] = [];
   if (binding.kind === "regulatory" || binding.kind === "cold_start") {
     steps.push(`${binding.day1.focus}: ${binding.day1.tasks[0]}`);
@@ -529,7 +575,7 @@ function buildNextSteps(s: Signals, topic: string, binding: BindingConstraint): 
   if (!s.hasAudience) {
     steps.push("Interview 5 potential users to confirm this is an acute, recurring pain point.");
   }
-  steps.push(`Build a simple landing page or waitlist describing "${topic}" and test conversion.`);
+  steps.push(`Build a simple landing page or waitlist describing ${label} and test conversion.`);
   if (!s.hasPricing) {
     steps.push("Test pricing willingness (e.g. mock checkout or deposit) before writing backend code.");
   }
@@ -720,7 +766,7 @@ function describeMarketDemand(s: Signals): string {
 
 export function heuristicSimulation(input: SimulationInput): SimulationReport {
   const s = analyze(input);
-  const topic = shortTopic(input.idea);
+  const label = ideaLabel(input.idea);
 
   const scores = {
     desirability: scoreDesirability(s),
@@ -742,7 +788,7 @@ export function heuristicSimulation(input: SimulationInput): SimulationReport {
   const targetUserVal = input.targetUser || input.audience;
 
   return {
-    summary: `Simulation for "${topic}". ${
+    summary: `Simulation of ${label}. ${
       s.hasEvidence
         ? "Real-world evidence was supplied and is factored into the scores."
         : "No evidence was supplied — the scores reflect the stated intent, not measured demand."
@@ -753,12 +799,12 @@ export function heuristicSimulation(input: SimulationInput): SimulationReport {
     problemClarity: describeProblemClarity(s, input),
     differentiation: describeDifferentiation(s),
     marketDemand: describeMarketDemand(s),
-    mvpSuggestion: `Build the simplest version of "${topic}" that tests the core value hypothesis without unnecessary fluff.`,
+    mvpSuggestion: `Build the simplest version of ${label} that tests the core value hypothesis without unnecessary fluff.`,
     scores,
     weakAssumption,
     experimentDesign,
     risks: buildRisks(s),
-    nextSteps: buildNextSteps(s, topic, binding),
+    nextSteps: buildNextSteps(s, label, binding),
     recommendation,
   };
 }
