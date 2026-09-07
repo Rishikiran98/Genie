@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeConstraints, heuristicSimulation } from "./heuristic";
+import { analyzeConstraints, bindingConstraint, heuristicSimulation } from "./heuristic";
 import type { SimulationInput } from "./schema";
 
 /**
@@ -183,5 +183,40 @@ describe("the report only asserts what it was told", () => {
     const report = heuristicSimulation({ ...SAAS, evidence: "3 firms pre-paid for a pilot" });
     expect(report.marketDemand).toContain("3 firms pre-paid for a pilot");
     expect(report.marketDemand).not.toMatch(/^validated/i);
+  });
+});
+
+describe("the binding constraint leads", () => {
+  it("is the legal question for the reference input, and every advisory field addresses it", () => {
+    expect(bindingConstraint(MARKETPLACE).kind).toBe("regulatory");
+    const report = heuristicSimulation(MARKETPLACE);
+    expect(report.experimentDesign).toMatch(/legal|jurisdiction/i);
+    expect(report.experimentDesign).not.toMatch(/landing page/i);
+    expect(report.weakAssumption).toContain('"food regulations"');
+    expect(report.recommendation).toMatch(/legal|regulat/i);
+    expect(report.recommendation).toMatch(/do not build/i);
+    expect(report.nextSteps[0]).toMatch(/legal/i);
+  });
+
+  it("chains to the next blocker after the legal question for a two-sided idea", () => {
+    const report = heuristicSimulation(MARKETPLACE);
+    expect(report.recommendation).toMatch(/next blocker is the supply-side cold start/i);
+  });
+
+  it("is the supply side for an unregulated marketplace", () => {
+    const input: SimulationInput = { idea: "A marketplace where retired teachers sell one-off tutoring sessions to parents", targetUser: "Parents of high-schoolers" };
+    expect(bindingConstraint(input).kind).toBe("cold_start");
+    expect(heuristicSimulation(input).experimentDesign).toMatch(/supply side/i);
+  });
+
+  it("keeps the demand-first path for a plain B2B SaaS idea", () => {
+    expect(bindingConstraint(SAAS).kind).toBe("willingness_to_pay");
+    const report = heuristicSimulation(SAAS);
+    expect(report.experimentDesign).toMatch(/deposit|pre-order|pay/i);
+    expect(report.experimentDesign).not.toMatch(/legal|jurisdiction/i);
+  });
+
+  it("moves to feasibility once paid evidence exists", () => {
+    expect(bindingConstraint({ ...SAAS, evidence: "4 firms pre-paid $49 for month one" }).kind).toBe("feasibility");
   });
 });

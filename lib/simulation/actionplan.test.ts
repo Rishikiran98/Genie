@@ -87,3 +87,30 @@ describe("llmActionPlan", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("day 1 starts with the binding constraint", () => {
+  const MARKETPLACE: SimulationInput = {
+    idea: "Marketplace where local home cooks sell fresh homemade meals to nearby busy professionals for pickup or delivery",
+    targetUser: "Busy professionals who regularly order food",
+    goal: "Test demand, repeat purchases, and marketplace viability",
+    constraints: "$2,000 budget, solo founder, one neighborhood, food regulations",
+    timeline: "4-week validation sprint",
+  };
+
+  it("is a legality check for the regulated marketplace", () => {
+    const plan = heuristicActionPlan(MARKETPLACE, heuristicSimulation(MARKETPLACE));
+    expect(plan.dailyPlan[0].focus).toMatch(/legal/i);
+    expect(plan.dailyPlan[0].tasks.join(" ")).toContain('"food regulations"');
+  });
+
+  it("stays demand-first for a plain B2B SaaS idea", () => {
+    const saas: SimulationInput = {
+      idea: "A B2B SaaS dashboard that helps small accounting firms track client document requests and deadlines in one place",
+      targetUser: "Owners of 5-20 person accounting firms",
+      goal: "Get 10 paying firms at $49/month",
+    };
+    const plan = heuristicActionPlan(saas, heuristicSimulation(saas));
+    expect(plan.dailyPlan[0].focus).toMatch(/sharpen the problem/i);
+    expect(plan.dailyPlan[0].tasks.join(" ")).not.toMatch(/legal/i);
+  });
+});

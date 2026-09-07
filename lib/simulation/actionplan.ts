@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { heuristicSimulation, shortTopic } from "./heuristic";
+import { bindingConstraint, heuristicSimulation, shortTopic } from "./heuristic";
 import { chatJson, readLlmConfig, type LlmConfig } from "./provider";
 import {
   simulationInputSchema,
@@ -57,25 +57,14 @@ export interface ActionPlanResult {
 export function heuristicActionPlan(input: SimulationInput, base: SimulationReport): ActionPlan {
   const topic = shortTopic(input.idea);
   const user = input.targetUser || input.audience;
-  const hasAudience = Boolean(user?.trim());
   const hasTimeline = Boolean(input.timeline?.trim());
-  const lowConfidence = base.scores.confidence < 60;
   const lowFeasibility = base.scores.feasibility < 55;
+  // Day 1 starts with whatever can kill the idea first (legal check, supply
+  // side, willingness to pay, or the hardest component) — see bindingConstraint().
+  const binding = bindingConstraint(input);
 
   const dailyPlan: ActionPlan["dailyPlan"] = [
-    {
-      day: 1,
-      focus: "Sharpen the problem and identify weak assumptions",
-      tasks: [
-        lowConfidence
-          ? "Write the problem you're solving in one concrete sentence — the painful, recurring situation."
-          : `Identify the weak assumption: "${base.weakAssumption}".`,
-        hasAudience
-          ? `Profile one specific target user within "${user!.trim()}".`
-          : "Pick ONE narrow target user persona you can reach this week.",
-        "List the alternatives they currently use to solve this problem.",
-      ],
-    },
+    { day: 1, ...binding.day1 },
     {
       day: 2,
       focus: "Design and launch the validation experiment",

@@ -521,8 +521,11 @@ function buildRisks(s: Signals): string[] {
   return risks.slice(0, 6);
 }
 
-function buildNextSteps(s: Signals, topic: string): string[] {
+function buildNextSteps(s: Signals, topic: string, binding: BindingConstraint): string[] {
   const steps: string[] = [];
+  if (binding.kind === "regulatory" || binding.kind === "cold_start") {
+    steps.push(`${binding.day1.focus}: ${binding.day1.tasks[0]}`);
+  }
   if (!s.hasAudience) {
     steps.push("Interview 5 potential users to confirm this is an acute, recurring pain point.");
   }
@@ -535,6 +538,149 @@ function buildNextSteps(s: Signals, topic: string): string[] {
     steps.push("Set a time-boxed 7-day validation milestone to test core interest.");
   }
   return steps.slice(0, 6);
+}
+
+// ---------------------------------------------------------------------------
+// Binding constraint
+// ---------------------------------------------------------------------------
+
+/**
+ * The single thing most likely to kill the idea before the others matter.
+ * Priority is fixed: a legal veto makes every other test pointless; a
+ * two-sided idea with no supply cannot test demand; unproven willingness to
+ * pay comes before worrying about whether it can be built.
+ */
+export type BindingConstraintKind = "regulatory" | "cold_start" | "willingness_to_pay" | "feasibility";
+
+export interface BindingConstraint {
+  kind: BindingConstraintKind;
+  /** Short noun phrase for prose ("the legal question (\"food regulations\")"). */
+  label: string;
+  weakAssumption: string;
+  experimentDesign: string;
+  recommendation: string;
+  /** The first day of the action plan, which must start here. */
+  day1: { focus: string; tasks: string[] };
+}
+
+/** Which body of rules to point the user at, from the idea's own words. */
+function regulatoryHint(text: string): string {
+  const t = text.toLowerCase();
+  if (/\b(food|meal|meals|cook|cooks|kitchen|bak(e|ing)|catering)\b/.test(t)) return "cottage-food and health-code rules for home kitchens";
+  if (/\b(health|patient|patients|medical|clinic|therapy|therapist|diagnos)/.test(t)) return "health-data (HIPAA / GDPR) and medical-device rules";
+  if (/\b(loan|lending|payment|payments|invest|investing|bank|banking|insurance|credit)\b/.test(t)) return "financial-services licensing (KYC / AML)";
+  if (/\b(alcohol|cannabis|tobacco|vape)\b/.test(t)) return "controlled-substance licensing";
+  if (/\b(kids|children|minors|under 13)\b/.test(t)) return "child-privacy rules (COPPA / age verification)";
+  if (/\b(rental|rentals|housing|tenant|sublet)\b/.test(t)) return "housing and short-term-rental rules";
+  if (/\b(drone|drones|aircraft)\b/.test(t)) return "aviation rules";
+  return "the licensing and compliance rules that apply";
+}
+
+const PAID_EVIDENCE = /\b(paid|pre-?paid|pre-?order|purchase|bought|revenue|deposit|invoice)\b|\$\d/i;
+
+function rankConstraints(s: Signals): BindingConstraintKind[] {
+  const order: BindingConstraintKind[] = [];
+  if (s.constraints.regulatoryQuote) order.push("regulatory");
+  if (s.coldStart) order.push("cold_start");
+  if (!(s.hasEvidence && PAID_EVIDENCE.test(s.evidenceText))) order.push("willingness_to_pay");
+  order.push("feasibility");
+  return order;
+}
+
+function describeConstraint(kind: BindingConstraintKind, s: Signals, input: SimulationInput, next: string | null): BindingConstraint {
+  const audience = (input.targetUser || input.audience)?.trim();
+  const who = audience ? `"${audience}"` : "your target users";
+  const then = next ? ` If it clears, the next blocker is ${next}.` : "";
+
+  switch (kind) {
+    case "regulatory": {
+      const quote = s.constraints.regulatoryQuote ?? "the regulatory constraint";
+      const hint = regulatoryHint(`${input.idea} ${input.constraints ?? ""}`);
+      return {
+        kind,
+        label: `the legal question ("${quote}")`,
+        weakAssumption: `That "${quote}" permits this to operate at all in your jurisdiction — if it does not, nothing else in this report matters.`,
+        experimentDesign: `Before anything else, confirm this is legal in your jurisdiction: identify ${hint}, ask the local authority or a specialist, and get a written yes/no with any conditions (permits, inspections, insurance). Only then test demand.`,
+        recommendation: `Do not build yet. Resolve the legal question first: "${quote}" can veto the idea outright, so a day spent confirming ${hint} is worth more than a month of anything else.${then}`,
+        day1: {
+          focus: "Confirm it is legal before anything else",
+          tasks: [
+            `Identify ${hint} for "${quote}" — the exact rules, who enforces them, and what a compliant operation must have.`,
+            "Call or email the enforcing authority (or a specialist) and ask for a written answer: allowed, allowed with conditions, or not allowed.",
+            `Write the kill criterion now: if "${quote}" cannot be satisfied within your budget and timeline, stop here and pivot.`,
+          ],
+        },
+      };
+    }
+    case "cold_start":
+      return {
+        kind,
+        label: "the supply-side cold start",
+        weakAssumption: "Enough of the supply side (the people providing the goods or service) will sign up and stay active before there is demand to pay them.",
+        experimentDesign: `Recruit the supply side by hand first: get 5–10 providers committed in writing to list before spending anything on demand, then match the first orders to ${who} manually (concierge) to prove both sides transact.`,
+        recommendation: `Do not build the platform yet. Line up supply by hand, run concierge matches, and only if both sides transact repeatedly is a build justified.${then}`,
+        day1: {
+          focus: "Line up the supply side by hand",
+          tasks: [
+            "List 20 candidate providers you could reach this week and contact 10 of them directly.",
+            "Ask each what they would need to list (pricing, effort, trust) and note who says yes without prompting.",
+            "Define the supply success metric for the week (e.g. 5 committed providers) — no demand work until it is met.",
+          ],
+        },
+      };
+    case "willingness_to_pay":
+      return {
+        kind,
+        label: "willingness to pay",
+        weakAssumption: `${who === "your target users" ? "Target users" : who} will pay money to solve this problem rather than using existing free workarounds.`,
+        experimentDesign: `Don't build the product yet. Put up a one-page description, recruit 10 interviews with ${who}, and ask for a deposit or pre-order rather than an email address — a payment is evidence, a signup is not.`,
+        recommendation: `Validate before building: test whether ${who} will pay, with a pre-order or deposit, before writing code. The scores above read the framing, not demand.${then}`,
+        day1: {
+          focus: "Sharpen the problem and identify weak assumptions",
+          tasks: [
+            !audience || s.vagueHits > 0
+              ? "Write the problem you're solving in one concrete sentence — the painful, recurring situation."
+              : `Identify the weak assumption: "${who} will pay money to solve this problem rather than using existing free workarounds."`,
+            audience
+              ? `Profile one specific target user within ${who}.`
+              : "Pick ONE narrow target user persona you can reach this week.",
+            "List the alternatives they currently use to solve this problem.",
+          ],
+        },
+      };
+    case "feasibility":
+      return {
+        kind,
+        label: "build feasibility",
+        weakAssumption: "The hardest part of this can be built and operated within the stated constraints.",
+        experimentDesign: "Spike the hardest component for two days before anything else: prove it works end-to-end at toy scale and measure what it costs to run.",
+        recommendation: `Demand has some evidence behind it; the open question is whether this can be built as constrained. Spike the riskiest component before committing to a full build.${then}`,
+        day1: {
+          focus: "De-risk the hardest component",
+          tasks: [
+            "Name the single hardest technical or operational piece and why it might not work.",
+            "Build a throwaway spike of just that piece and run it end-to-end once.",
+            "Record what it cost in time and money — that number sets the build scope.",
+          ],
+        },
+      };
+  }
+}
+
+/** The ordered chain of constraints for an input; the first is the binding one. */
+export function constraintChain(input: SimulationInput): BindingConstraint[] {
+  const s = analyze(input);
+  const kinds = rankConstraints(s);
+  return kinds.map((kind, i) => {
+    const nextKind = kinds[i + 1];
+    const next = nextKind ? describeConstraint(nextKind, s, input, null).label : null;
+    return describeConstraint(kind, s, input, next);
+  });
+}
+
+/** The single constraint most likely to kill the idea first. Drives recommendation, weak assumption, experiment and Day 1. */
+export function bindingConstraint(input: SimulationInput): BindingConstraint {
+  return constraintChain(input)[0];
 }
 
 /** Describes how well the *input* frames the problem — never whether the problem is real. */
@@ -584,21 +730,14 @@ export function heuristicSimulation(input: SimulationInput): SimulationReport {
     confidence: scoreConfidence(s),
   };
 
-  const weakAssumption = !s.hasAudience
-    ? "People in a specific market actually suffer from this problem enough to seek a solution."
-    : !s.hasPricing
-      ? "Target users will pay money to solve this problem rather than using existing free workarounds."
-      : "The proposed value proposition is compelling enough to switch from established alternatives.";
-
-  const experimentDesign = `Don't build the product yet. Build a simple landing page outlining "${topic}", run targeted outreach or small ads to recruit 10 target user interviews, collect email signups, and test willingness to pay.`;
-
-  // Without evidence nothing here can justify "proceed with building"; the
-  // scores describe the framing, not demand.
-  const recommendation = !s.hasEvidence
-    ? `Validate before building: test the weak assumption ("${weakAssumption}") with target users, and treat the scores above as a read on the framing, not on demand.`
-    : scores.desirability >= 65 && scores.feasibility >= 60
+  // Everything advisory in the report leads with the binding constraint.
+  const binding = bindingConstraint(input);
+  const weakAssumption = binding.weakAssumption;
+  const experimentDesign = binding.experimentDesign;
+  const recommendation =
+    binding.kind === "feasibility" && scores.desirability >= 65 && scores.feasibility >= 60
       ? "The supplied evidence supports moving to the smallest buildable version, while continuing to measure willingness to pay."
-      : "The supplied evidence is not yet strong enough to justify a build; extend the experiment before investing heavy build time.";
+      : binding.recommendation;
 
   const targetUserVal = input.targetUser || input.audience;
 
@@ -619,7 +758,7 @@ export function heuristicSimulation(input: SimulationInput): SimulationReport {
     weakAssumption,
     experimentDesign,
     risks: buildRisks(s),
-    nextSteps: buildNextSteps(s, topic),
+    nextSteps: buildNextSteps(s, topic, binding),
     recommendation,
   };
 }
