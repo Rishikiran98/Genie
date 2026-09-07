@@ -1,0 +1,50 @@
+{
+  "name": "26-scenarios-consistent",
+  "description": "Scenario lenses keep their ordering and reuse the label, on the reference input.",
+  "input": {
+    "idea": "Marketplace where local home cooks sell fresh homemade meals to nearby busy professionals for pickup or delivery",
+    "targetUser": "Busy professionals who regularly order food",
+    "goal": "Test demand, repeat purchases, and marketplace viability",
+    "constraints": "$2,000 budget, solo founder, one neighborhood, food regulations",
+    "timeline": "4-week validation sprint"
+  },
+  "assertions": [
+    {
+      "type": "higherThan",
+      "field": "scenarios.optimistic.scores.desirability",
+      "variant": {},
+      "by": 0
+    },
+    {
+      "type": "band",
+      "field": "scenarios.pessimistic.scores.executionRisk",
+      "max": 30
+    },
+    {
+      "type": "band",
+      "field": "scenarios.optimistic.scores.desirability",
+      "min": 60
+    },
+    {
+      "type": "matches",
+      "field": "scenarios.optimistic.narrative",
+      "pattern": "legal|jurisdiction"
+    },
+    {
+      "type": "matches",
+      "field": "scenarios.pessimistic.narrative",
+      "pattern": "food regulations"
+    },
+    {
+      "type": "notMatches",
+      "field": "scenarios.fast.narrative",
+      "pattern": "…"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

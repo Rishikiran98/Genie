@@ -1,0 +1,52 @@
+{
+  "name": "11-newsletter-no-evidence",
+  "description": "The same newsletter with no evidence sits under the ceilings and is told to validate.",
+  "input": {
+    "idea": "A newsletter that summarizes one research paper a day for software engineers",
+    "targetUser": "Software engineers who want to keep up with ML research",
+    "goal": "Reach 500 paying subscribers"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.desirability",
+      "max": 70
+    },
+    {
+      "type": "band",
+      "field": "report.scores.confidence",
+      "max": 55
+    },
+    {
+      "type": "band",
+      "field": "report.scores.feasibility",
+      "min": 60
+    },
+    {
+      "type": "matches",
+      "field": "report.marketDemand",
+      "pattern": "no demand evidence"
+    },
+    {
+      "type": "matches",
+      "field": "report.recommendation",
+      "pattern": "validate"
+    },
+    {
+      "type": "notMatches",
+      "field": "report.recommendation",
+      "pattern": "build the smallest|proceed"
+    },
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "willingness_to_pay"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

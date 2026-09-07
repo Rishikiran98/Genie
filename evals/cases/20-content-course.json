@@ -1,0 +1,37 @@
+{
+  "name": "20-content-course",
+  "description": "Low-complexity content idea: feasible, demand-first.",
+  "input": {
+    "idea": "A six-week online course teaching junior developers how to read production code",
+    "targetUser": "Junior developers in their first job",
+    "goal": "30 paying students at $199"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.feasibility",
+      "min": 60
+    },
+    {
+      "type": "band",
+      "field": "report.scores.executionRisk",
+      "min": 50
+    },
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "willingness_to_pay"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "pay|deposit|pre-order"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

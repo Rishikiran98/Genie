@@ -1,0 +1,35 @@
+{
+  "name": "23-no-audience",
+  "description": "No target user: the risk says so and Day 1 starts with the problem sentence.",
+  "input": {
+    "idea": "A tool that turns meeting recordings into follow-up emails automatically"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "target user"
+    },
+    {
+      "type": "matches",
+      "field": "report.targetUser",
+      "pattern": "no target user"
+    },
+    {
+      "type": "matches",
+      "field": "plan.dailyPlan[0].tasks",
+      "pattern": "one concrete sentence"
+    },
+    {
+      "type": "band",
+      "field": "report.scores.confidence",
+      "max": 50
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

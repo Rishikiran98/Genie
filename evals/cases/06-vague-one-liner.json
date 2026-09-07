@@ -1,0 +1,55 @@
+{
+  "name": "06-vague-one-liner",
+  "description": "A vague one-liner: low scores, clarity risks, and the safe 'the idea' label.",
+  "input": {
+    "idea": "I want to build something cool, maybe an app of some kind for people"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.desirability",
+      "max": 45
+    },
+    {
+      "type": "band",
+      "field": "report.scores.confidence",
+      "max": 35
+    },
+    {
+      "type": "band",
+      "field": "report.scores.differentiation",
+      "max": 50
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "ambiguous|vague"
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "target user"
+    },
+    {
+      "type": "matches",
+      "field": "report.problemClarity",
+      "pattern": "does not say|not the problem"
+    },
+    {
+      "type": "matches",
+      "field": "report.summary",
+      "pattern": "the idea\\."
+    },
+    {
+      "type": "matches",
+      "field": "plan.dailyPlan[0].tasks",
+      "pattern": "one concrete sentence"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

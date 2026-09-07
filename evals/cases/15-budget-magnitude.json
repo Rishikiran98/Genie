@@ -1,0 +1,45 @@
+{
+  "name": "15-budget-magnitude",
+  "description": "$200,000 is not $2,000: a comfortable budget must not be penalised like a shoestring one.",
+  "input": {
+    "idea": "Marketplace where local home cooks sell fresh homemade meals to nearby busy professionals for pickup or delivery",
+    "targetUser": "Busy professionals who regularly order food",
+    "goal": "Test demand, repeat purchases, and marketplace viability",
+    "constraints": "$200,000 budget, team of three, one neighborhood, food regulations",
+    "timeline": "4-week validation sprint"
+  },
+  "assertions": [
+    {
+      "type": "higherThan",
+      "field": "report.scores.feasibility",
+      "variant": {
+        "constraints": "$2,000 budget, solo founder, one neighborhood, food regulations"
+      },
+      "by": 8
+    },
+    {
+      "type": "higherThan",
+      "field": "report.scores.executionRisk",
+      "variant": {
+        "constraints": "$2,000 budget, solo founder, one neighborhood, food regulations"
+      },
+      "by": 8
+    },
+    {
+      "type": "notMatches",
+      "field": "report.risks",
+      "pattern": "\\$200,000"
+    },
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "regulatory"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

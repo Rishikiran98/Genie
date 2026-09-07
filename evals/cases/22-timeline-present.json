@@ -1,0 +1,31 @@
+{
+  "name": "22-timeline-present",
+  "description": "A stated timeline raises feasibility slightly and removes the scope-bloat risk (idea text itself has no time words).",
+  "input": {
+    "idea": "A tool that turns sales-call recordings into follow-up emails automatically",
+    "targetUser": "Account executives at small software companies",
+    "goal": "20 active users",
+    "timeline": "launch in 2 weeks"
+  },
+  "assertions": [
+    {
+      "type": "higherThan",
+      "field": "report.scores.feasibility",
+      "variant": {
+        "timeline": null
+      },
+      "by": 1
+    },
+    {
+      "type": "notMatches",
+      "field": "report.risks",
+      "pattern": "no target timeline"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

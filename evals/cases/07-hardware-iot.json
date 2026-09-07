@@ -1,0 +1,48 @@
+{
+  "name": "07-hardware-iot",
+  "description": "Hardware carries execution friction: feasibility and safety visibly lower than a content idea.",
+  "input": {
+    "idea": "A hardware IoT soil sensor device for smallholder farms that texts irrigation advice",
+    "targetUser": "Smallholder farmers in dry regions",
+    "timeline": "3 months"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.feasibility",
+      "max": 55
+    },
+    {
+      "type": "band",
+      "field": "report.scores.executionRisk",
+      "max": 50
+    },
+    {
+      "type": "contains",
+      "field": "report.risks",
+      "pattern": "hardware"
+    },
+    {
+      "type": "lowerThan",
+      "field": "report.scores.feasibility",
+      "variant": {
+        "idea": "A weekly newsletter with irrigation advice for smallholder farms"
+      },
+      "by": 10
+    },
+    {
+      "type": "lowerThan",
+      "field": "report.scores.executionRisk",
+      "variant": {
+        "idea": "A weekly newsletter with irrigation advice for smallholder farms"
+      },
+      "by": 10
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

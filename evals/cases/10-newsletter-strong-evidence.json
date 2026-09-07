@@ -1,0 +1,46 @@
+{
+  "name": "10-newsletter-strong-evidence",
+  "description": "Strong quantified evidence lifts demand and confidence high.",
+  "input": {
+    "idea": "A newsletter that summarizes one research paper a day for software engineers",
+    "targetUser": "Software engineers who want to keep up with ML research",
+    "goal": "Reach 500 paying subscribers",
+    "evidence": "2,000 free subscribers in 6 weeks, 300 converted to $5/month, 40% open rate"
+  },
+  "assertions": [
+    {
+      "type": "band",
+      "field": "report.scores.desirability",
+      "min": 75
+    },
+    {
+      "type": "band",
+      "field": "report.scores.confidence",
+      "min": 75
+    },
+    {
+      "type": "matches",
+      "field": "report.marketDemand",
+      "pattern": "300 converted"
+    },
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "feasibility"
+    },
+    {
+      "type": "higherThan",
+      "field": "report.scores.desirability",
+      "variant": {
+        "evidence": null
+      },
+      "by": 10
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

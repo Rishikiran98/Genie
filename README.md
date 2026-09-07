@@ -110,10 +110,30 @@ Client IPs are logged only as a salted hash (`ipHash`). Set `GENIE_LOG_LEVEL`
 | `npm run build`    | Production build                      |
 | `npm run test`     | Engine unit tests + route integration tests (Vitest) |
 | `npm run test:coverage` | Same, with a v8 coverage report (no threshold yet) |
+| `npm run eval`     | Judgement regression harness over `evals/cases` (heuristic engine, offline) |
+| `npm run eval:llm` | The same cases through the LLM path (needs a key; never in CI) |
 | `npm run typecheck`| Type-check with `tsc`                 |
 | `npm run lint`     | Next.js / ESLint                      |
 
-CI runs lint → typecheck → tests with coverage → build on every push and PR.
+CI runs lint → typecheck → tests with coverage → evals (reporting only for
+now) → build on every push and PR.
+
+## Evals
+
+`evals/` holds 26 inputs — the reference home-cook marketplace, a plain
+B2B SaaS idea, a vague one-liner, hardware, regulated health / lending /
+alcohol / kids ideas, ideas with and without evidence, an obviously bad
+idea — each with assertions on **bands and properties, never exact strings**:
+score ranges, movements relative to a variant of the same input, required
+themes in specific fields, and orderings ("the regulatory risk is first").
+`npm run eval` runs them all through the heuristic engine in well under a
+second and is the guard against the engine's judgement regressing. See
+[evals/README.md](evals/README.md) for the assertion shapes and how to add a
+case.
+
+The scores remain ordinal signals, not measurements — the harness checks
+that they move in the right direction for the right reasons, not that they
+equal a number.
 
 ## Project layout
 
@@ -133,7 +153,7 @@ lib/
 lib/simulation/
   schema.ts                # Zod schema + types (the report contract)
   prompt.ts                # System / user prompt templates
-  heuristic.ts             # Deterministic offline engine
+  heuristic.ts             # Deterministic offline engine (signals → scores, binding constraint, idea label)
   provider.ts              # OpenAI-compatible LLM adapter (shared chatJson)
   engine.ts                # Simulation dispatch + fallback logic
   telemetry.ts             # Fallback / completion log events shared by dispatchers
@@ -148,6 +168,7 @@ lib/storage/
 components/AuthPanel.tsx   # Magic-link sign-in; renders only when Supabase is configured
 supabase/migrations/       # SQL schema for the optional Supabase backend (0001 tables, 0002 auth + RLS)
 supabase/verify_rls.sh     # Replays the migrations on a local Postgres and asserts the RLS policies
+evals/                     # Judgement regression harness: run.ts + cases/*.json
 ```
 
 ## Persistence

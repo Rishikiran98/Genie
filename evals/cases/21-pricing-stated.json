@@ -1,0 +1,34 @@
+{
+  "name": "21-pricing-stated",
+  "description": "Stating a price is a small commercial signal, never a demand proof.",
+  "input": {
+    "idea": "A mobile app that reminds renters of lease deadlines and rent increases for $2.99 per month",
+    "targetUser": "Renters in big cities"
+  },
+  "assertions": [
+    {
+      "type": "higherThan",
+      "field": "report.scores.desirability",
+      "variant": {
+        "idea": "A mobile app that reminds renters of lease deadlines and rent increases"
+      },
+      "by": 1
+    },
+    {
+      "type": "band",
+      "field": "report.scores.desirability",
+      "max": 70
+    },
+    {
+      "type": "band",
+      "field": "report.scores.confidence",
+      "max": 55
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

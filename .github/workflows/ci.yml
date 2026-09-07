@@ -22,5 +22,10 @@ jobs:
         run: npm run typecheck
       - name: Unit + route tests (with coverage report)
         run: npm run test:coverage
+      # Reporting only for now; drop continue-on-error once it has been green
+      # across a few unrelated PRs (see evals/README.md).
+      - name: Eval harness (judgement regressions)
+        run: npm run eval
+        continue-on-error: true
       - name: Build
         run: npm run build

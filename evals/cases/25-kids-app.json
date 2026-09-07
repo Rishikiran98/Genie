@@ -1,0 +1,32 @@
+{
+  "name": "25-kids-app",
+  "description": "Child-privacy compliance binds for an app aimed at kids.",
+  "input": {
+    "idea": "A reading-practice app for kids under 13 that reads along with them",
+    "targetUser": "Parents of early readers",
+    "constraints": "COPPA compliance"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "regulatory"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "child-privacy|coppa|legal"
+    },
+    {
+      "type": "matches",
+      "field": "plan.dailyPlan[0].focus",
+      "pattern": "legal"
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}

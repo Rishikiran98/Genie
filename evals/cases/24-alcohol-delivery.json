@@ -1,0 +1,33 @@
+{
+  "name": "24-alcohol-delivery",
+  "description": "A licence constraint on alcohol delivery: regulatory first with the controlled-substance hint.",
+  "input": {
+    "idea": "Same-day craft beer and alcohol delivery from local breweries",
+    "targetUser": "Adults hosting weekend gatherings",
+    "constraints": "needs a liquor license, $5k budget"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "binding.kind",
+      "value": "regulatory"
+    },
+    {
+      "type": "matches",
+      "field": "report.experimentDesign",
+      "pattern": "controlled-substance|licens"
+    },
+    {
+      "type": "firstMatch",
+      "field": "report.risks",
+      "pattern": "regulat",
+      "index": 0
+    },
+    {
+      "type": "noEllipsis"
+    },
+    {
+      "type": "noRawIdea"
+    }
+  ]
+}
