@@ -13,7 +13,7 @@ npm run eval:llm              # same cases through the LLM path; needs GENIE_LLM
 ```
 
 Exit code is 0 only when every assertion in every case passes. CI runs the
-heuristic mode as a reporting step; see the note at the bottom.
+heuristic mode and fails the build on any regression.
 
 ## What it tests
 
@@ -99,9 +99,8 @@ Tighten a band only when a real regression slipped through it.
 
 ## CI
 
-The workflow runs `npm run eval` after the unit tests as a **reporting step**
-(`continue-on-error: true`). Once it has been green across a few unrelated
-PRs, remove that line to make it blocking.
+The workflow runs `npm run eval` after the unit tests and fails on any
+regression.
 
 The `--llm` mode is for local use when tuning `prompt.ts`: it scores the
 same assertions against real model output, so you can see which judgement

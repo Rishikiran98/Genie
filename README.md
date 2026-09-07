@@ -115,8 +115,8 @@ Client IPs are logged only as a salted hash (`ipHash`). Set `GENIE_LOG_LEVEL`
 | `npm run typecheck`| Type-check with `tsc`                 |
 | `npm run lint`     | Next.js / ESLint                      |
 
-CI runs lint → typecheck → tests with coverage → evals (reporting only for
-now) → build on every push and PR.
+CI runs lint → typecheck → tests with coverage → evals → build on every push
+and PR.
 
 ## Evals
 
