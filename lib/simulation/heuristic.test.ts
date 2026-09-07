@@ -145,3 +145,43 @@ describe("desirability measures evidence, not vocabulary", () => {
     expect(withBudget.scores.desirability).toBeLessThanOrEqual(without.scores.desirability);
   });
 });
+
+describe("the report only asserts what it was told", () => {
+  it("says plainly when no differentiation was stated", () => {
+    const report = heuristicSimulation(MARKETPLACE);
+    expect(report.differentiation).toMatch(/no differentiation .* was stated/i);
+    expect(report.differentiation).not.toMatch(/clear differentiation/i);
+    expect(report.scores.differentiation).toBeLessThanOrEqual(50);
+  });
+
+  it("credits differentiation that the input actually expresses", () => {
+    const report = heuristicSimulation({
+      ...SAAS,
+      idea: "Unlike existing practice-management suites, a single-purpose tracker for client document requests that accountants can set up in ten minutes",
+    });
+    expect(report.differentiation).toMatch(/stated differentiation/i);
+    expect(report.differentiation).toContain("Unlike existing practice-management suites");
+    expect(report.scores.differentiation).toBeGreaterThan(50);
+  });
+
+  it("describes what the input contains instead of asserting the problem is real", () => {
+    const report = heuristicSimulation(SAAS);
+    expect(report.problemClarity).not.toMatch(/is clear and addresses/i);
+    expect(report.problemClarity).toMatch(/names who it is for/i);
+    expect(report.problemClarity).toMatch(/assumption|unverified/i);
+  });
+
+  it("never calls demand validated without evidence", () => {
+    const report = heuristicSimulation(MARKETPLACE);
+    expect(report.marketDemand).toMatch(/no demand evidence/i);
+    expect(report.marketDemand).not.toMatch(/validated/i);
+    expect(report.recommendation).not.toMatch(/proceed with building|high signal/i);
+    expect(report.summary).toMatch(/no evidence/i);
+  });
+
+  it("quotes the evidence rather than declaring the idea validated", () => {
+    const report = heuristicSimulation({ ...SAAS, evidence: "3 firms pre-paid for a pilot" });
+    expect(report.marketDemand).toContain("3 firms pre-paid for a pilot");
+    expect(report.marketDemand).not.toMatch(/^validated/i);
+  });
+});

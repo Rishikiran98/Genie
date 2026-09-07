@@ -134,6 +134,58 @@ const COLD_START_WORDS = [
 ];
 
 /**
+ * Comparative language: the only way the input can *state* differentiation.
+ * Without one of these, the report must not claim the idea is differentiated.
+ */
+const DIFFERENTIATION_WORDS = [
+  "unlike",
+  "instead of",
+  "unique",
+  "competitor",
+  "existing tools",
+  "existing alternatives",
+  "existing solutions",
+  "existing apps",
+  "existing services",
+  "compared to",
+  "better than",
+  "cheaper than",
+  "faster than",
+  "simpler than",
+  "no one else",
+  "nobody else",
+  "differentiat",
+  "whereas",
+  "alternative to",
+  "replaces",
+  "rather than",
+];
+
+/** Words that describe a pain or friction, i.e. that the input explains *why* someone would want this. */
+const PAIN_WORDS = [
+  "struggle",
+  "waste",
+  "wasting",
+  "hard to",
+  "difficult",
+  "pain",
+  "frustrat",
+  "can't",
+  "cannot",
+  "manual",
+  "manually",
+  "slow",
+  "expensive",
+  "problem",
+  "tedious",
+  "time-consuming",
+  "error-prone",
+  "miss",
+  "forget",
+  "no way to",
+];
+
+/**
  * Epistemic ceilings when no evidence is supplied. Without real-world signal
  * (interviews, signups, payments) demand is a hypothesis, however well the
  * idea is written, so desirability is capped at "promising" and confidence at
@@ -171,7 +223,7 @@ export interface ConstraintSignals {
 function clauses(text: string): string[] {
   return text
     // Commas separate clauses unless they are thousands separators ("$2,000").
-    .split(/,(?!\d{3})|[;\n]|\band\b/i)
+    .split(/,(?!\d{3})|[;\n]|\s[—–-]\s|(?<=[.!?])\s|\band\b/i)
     .map((c) => c.trim().replace(/^[-–—•\s]+|[.\s]+$/g, ""))
     .filter(Boolean);
 }
@@ -259,6 +311,10 @@ interface Signals {
   evidenceText: string;
   /** Two-sided / network-shaped: value needs supply and demand to exist first. */
   coldStart: boolean;
+  /** The clause in which the user stated how this differs from alternatives, if they did. */
+  differentiationQuote: string | null;
+  /** Whether the input explains the pain it removes, not just the product. */
+  describesPain: boolean;
   vagueHits: number;
   marketHits: number;
   mvpHits: number;
@@ -309,6 +365,8 @@ function analyze(input: SimulationInput): Signals {
     quantifiedEvidence: /\d/.test(evidenceText),
     evidenceText,
     coldStart: countHits(combinedText, COLD_START_WORDS) > 0,
+    differentiationQuote: quoteClause(`${input.idea}. ${input.goal ?? ""}`, DIFFERENTIATION_WORDS),
+    describesPain: countHits(combinedText, PAIN_WORDS) > 0,
     vagueHits: countHits(combinedText, VAGUE_WORDS),
     marketHits: countHits(combinedText, MARKET_WORDS),
     mvpHits: countHits(combinedText, MVP_WORDS),
@@ -366,12 +424,17 @@ function scoreFeasibility(s: Signals): number {
   return clamp(score);
 }
 
+/** Neutral: nothing was said about alternatives, so nothing is known either way. */
+const DIFFERENTIATION_NEUTRAL = 50;
+
 function scoreDifferentiation(s: Signals): number {
-  let score = 50;
-  if (s.wordCount >= 20) score += 10;
-  if (s.hasAudience && s.hasGoal) score += 12;
-  if (s.domains.some((d) => d.name === "AI" || d.name === "SaaS")) score += 5;
-  if (s.text.includes("unique") || s.text.includes("unlike") || s.text.includes("instead of")) score += 12;
+  // Only an explicit contrast can move this above neutral. Word count, a named
+  // audience, or a fashionable domain say nothing about alternatives.
+  if (!s.differentiationQuote) return clamp(DIFFERENTIATION_NEUTRAL - s.vagueHits * 4);
+  let score = DIFFERENTIATION_NEUTRAL + 15;
+  // A contrast aimed at a specific audience is sharper than a generic one.
+  if (s.hasAudience) score += 5;
+  score -= s.vagueHits * 4;
   return clamp(score);
 }
 
@@ -474,6 +537,41 @@ function buildNextSteps(s: Signals, topic: string): string[] {
   return steps.slice(0, 6);
 }
 
+/** Describes how well the *input* frames the problem — never whether the problem is real. */
+function describeProblemClarity(s: Signals, input: SimulationInput): string {
+  const present: string[] = [];
+  const missing: string[] = [];
+  (input.targetUser || input.audience ? present : missing).push(
+    input.targetUser || input.audience ? "names who it is for" : "who it is for",
+  );
+  (s.hasGoal ? present : missing).push(s.hasGoal ? "states a goal" : "a goal");
+  (s.describesPain ? present : missing).push(
+    s.describesPain ? "describes the pain it removes" : "the specific recurring pain it removes",
+  );
+  const vague = s.vagueHits > 0 ? " Some of the wording is vague, which usually means the problem is not yet pinned down." : "";
+  if (missing.length === 0) {
+    return `The input ${present.join(", ")}. That frames the problem well; whether the pain is felt as strongly as described is still unverified.${vague}`;
+  }
+  if (present.length === 0) {
+    return `The input describes a product but not the problem: it does not say ${missing.join(", or ")}. Until it does, every other score rests on guesswork.${vague}`;
+  }
+  return `The input ${present.join(" and ")}, but does not say ${missing.join(" or ")} — that remains an assumption.${vague}`;
+}
+
+function describeDifferentiation(s: Signals): string {
+  if (!s.differentiationQuote) {
+    return "No differentiation from existing alternatives was stated — this is untested. Name what your target user uses for this today and why they would switch.";
+  }
+  return `Stated differentiation: "${s.differentiationQuote}". Treat it as a hypothesis — nothing in the input shows that target users see or value that difference.`;
+}
+
+function describeMarketDemand(s: Signals): string {
+  if (!s.hasEvidence) {
+    return "No demand evidence was supplied. Desirability is inferred from the framing alone and capped accordingly; repeat use and willingness to pay remain assumptions until tested.";
+  }
+  return `Evidence supplied: "${s.evidenceText}". This is the only demand signal in the input — weight it by how many people it covers and whether money changed hands.`;
+}
+
 export function heuristicSimulation(input: SimulationInput): SimulationReport {
   const s = analyze(input);
   const topic = shortTopic(input.idea);
@@ -494,34 +592,28 @@ export function heuristicSimulation(input: SimulationInput): SimulationReport {
 
   const experimentDesign = `Don't build the product yet. Build a simple landing page outlining "${topic}", run targeted outreach or small ads to recruit 10 target user interviews, collect email signups, and test willingness to pay.`;
 
-  const recommendation =
-    scores.confidence < 50
-      ? "Run a non-coding validation sprint: test the weak assumption with target users before writing code."
-      : scores.desirability >= 65 && scores.feasibility >= 60
-        ? "High signal — proceed with building the smallest viable version while testing user willingness to pay."
-        : "Promising concept — validate market demand with a landing page or prototype before investing heavy build time.";
+  // Without evidence nothing here can justify "proceed with building"; the
+  // scores describe the framing, not demand.
+  const recommendation = !s.hasEvidence
+    ? `Validate before building: test the weak assumption ("${weakAssumption}") with target users, and treat the scores above as a read on the framing, not on demand.`
+    : scores.desirability >= 65 && scores.feasibility >= 60
+      ? "The supplied evidence supports moving to the smallest buildable version, while continuing to measure willingness to pay."
+      : "The supplied evidence is not yet strong enough to justify a build; extend the experiment before investing heavy build time.";
 
   const targetUserVal = input.targetUser || input.audience;
 
   return {
     summary: `Simulation for "${topic}". ${
-      s.hasEvidence ? `Factoring in real-world evidence: "${s.evidenceText}".` : "Evaluating initial intent and assumptions."
+      s.hasEvidence
+        ? "Real-world evidence was supplied and is factored into the scores."
+        : "No evidence was supplied — the scores reflect the stated intent, not measured demand."
     }`,
     targetUser: targetUserVal
       ? `Defined target user: ${targetUserVal.trim()}`
       : "No target user defined yet. Identify one specific persona to focus validation.",
-    problemClarity:
-      scores.desirability >= 60
-        ? "The problem definition is clear and addresses an explicit need."
-        : "The problem statement is still broad. Frame the exact situation and friction point.",
-    differentiation:
-      scores.differentiation >= 60
-        ? "Clear differentiation from existing alternatives."
-        : "Differentiation is soft. Highlight the core edge or unique workflow.",
-    marketDemand:
-      s.hasEvidence
-        ? `Validated with evidence: ${s.evidenceText}`
-        : "Market demand is currently assumed. Gather user feedback to turn assumptions into evidence.",
+    problemClarity: describeProblemClarity(s, input),
+    differentiation: describeDifferentiation(s),
+    marketDemand: describeMarketDemand(s),
     mvpSuggestion: `Build the simplest version of "${topic}" that tests the core value hypothesis without unnecessary fluff.`,
     scores,
     weakAssumption,
